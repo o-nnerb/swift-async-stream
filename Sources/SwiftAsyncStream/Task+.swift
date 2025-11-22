@@ -1,6 +1,5 @@
 import Foundation
 
-@discardableResult
 /// Executes an asynchronous operation with a timeout.
 /// If the operation doesn't complete within the specified time, it will be cancelled.
 /// - Parameters:
@@ -9,6 +8,7 @@ import Foundation
 ///   - body: The asynchronous operation to execute.
 /// - Returns: The result of the operation if it completes within the timeout.
 /// - Throws: CancellationError if the timeout is reached, or any error thrown by the operation.
+@discardableResult
 public func withTaskTimeout<Value: Sendable>(
     seconds: TimeInterval,
     of valueType: Value.Type = Value.self,
