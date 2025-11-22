@@ -1,5 +1,5 @@
 import Testing
-import SwiftAsyncStream
+@testable import SwiftAsyncStream
 
 struct AsyncSignalTests {
     
@@ -35,19 +35,19 @@ struct AsyncSignalTests {
     @Test("AsyncSignal waits until signaled")
     func testWaitUntilSignaled() async {
         let signal = AsyncSignal()
-        var completed = false
-        
+        let completed = InlineProperty(wrappedValue: false)
+
         let task = Task {
             await signal.wait()
-            completed = true
+            completed.wrappedValue = true
         }
         
         // Wait a bit to ensure the task has started waiting
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        #expect(!completed) // Should not be completed yet
-        
+        #expect(!completed.wrappedValue) // Should not be completed yet
+
         signal.signal()
         await task.value
-        #expect(completed) // Should now be completed
+        #expect(completed.wrappedValue) // Should now be completed
     }
 }

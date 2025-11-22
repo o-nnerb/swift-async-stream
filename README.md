@@ -3,7 +3,7 @@
 
 # Swift Async Stream Utilities
 
-This repository contains experimental implementations of `AsyncSignal`, `ValueSubject`, and `PassthroughSubject` for Swift. These utilities provide reactive programming capabilities that are not currently available in Swift or in the official [swift-async-algorithms](https://github.com/apple/swift-async-algorithms) repository.
+This repository contains experimental implementations of `AsyncSignal`, `ValueSubject`, `PassthroughSubject` and `AsyncExpectation` for Swift. These utilities provide reactive programming capabilities that are not currently available in Swift or in the official [swift-async-algorithms](https://github.com/apple/swift-async-algorithms) repository.
 
 ## Overview
 

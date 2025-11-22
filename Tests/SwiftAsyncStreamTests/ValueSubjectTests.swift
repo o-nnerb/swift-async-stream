@@ -1,5 +1,5 @@
 import Testing
-import SwiftAsyncStream
+@testable import SwiftAsyncStream
 
 struct ValueSubjectTests {
     
@@ -36,12 +36,12 @@ struct ValueSubjectTests {
     @Test("Subscribers receive value updates")
     func testValueUpdates() async {
         let subject = ValueSubject(1)
-        var receivedValues: [Int] = []
-        
+        let receivedValues = InlineProperty<[Int]>(wrappedValue: [])
+
         let task = Task {
             for await value in subject {
-                receivedValues.append(value)
-                if receivedValues.count >= 3 {
+                receivedValues.wrappedValue.append(value)
+                if receivedValues.wrappedValue.count >= 3 {
                     break
                 }
             }
@@ -54,19 +54,19 @@ struct ValueSubjectTests {
         subject.value = 3
         
         await task.value
-        #expect(receivedValues == [1, 2, 3])
+        #expect(receivedValues.wrappedValue == [1, 2, 3])
     }
     
     @Test("Multiple subscribers receive the same values")
     func testMultipleSubscribers() async {
         let subject = ValueSubject(0)
-        var receivedByFirst: [Int] = []
-        var receivedBySecond: [Int] = []
-        
+        let receivedByFirst = InlineProperty<[Int]>(wrappedValue: [])
+        let receivedBySecond = InlineProperty<[Int]>(wrappedValue: [])
+
         let firstTask = Task {
             for await value in subject {
-                receivedByFirst.append(value)
-                if receivedByFirst.count >= 3 {
+                receivedByFirst.wrappedValue.append(value)
+                if receivedByFirst.wrappedValue.count >= 3 {
                     break
                 }
             }
@@ -74,8 +74,8 @@ struct ValueSubjectTests {
         
         let secondTask = Task {
             for await value in subject {
-                receivedBySecond.append(value)
-                if receivedBySecond.count >= 3 {
+                receivedBySecond.wrappedValue.append(value)
+                if receivedBySecond.wrappedValue.count >= 3 {
                     break
                 }
             }
@@ -90,8 +90,8 @@ struct ValueSubjectTests {
         await firstTask.value
         await secondTask.value
         
-        #expect(receivedByFirst == [0, 1, 2])
-        #expect(receivedBySecond == [0, 1, 2])
+        #expect(receivedByFirst.wrappedValue == [0, 1, 2])
+        #expect(receivedBySecond.wrappedValue == [0, 1, 2])
     }
     
     @Test("ValueSubject can be erased to AnyAsyncSequence")

@@ -1,17 +1,17 @@
 import Testing
-import SwiftAsyncStream
+@testable import SwiftAsyncStream
 
 struct PassthroughSubjectTests {
     
     @Test("PassthroughSubject sends values to subscribers")
     func testSendValues() async {
-        let subject = PassthroughSubject<Int, Never>()
-        var receivedValues: [Int] = []
-        
+        let subject = PassthroughSubject<Int>()
+        let receivedValues = InlineProperty<[Int]>(wrappedValue: [])
+
         let task = Task {
             for await value in subject {
-                receivedValues.append(value)
-                if receivedValues.count >= 2 {
+                receivedValues.wrappedValue.append(value)
+                if receivedValues.wrappedValue.count >= 2 {
                     break
                 }
             }
@@ -24,12 +24,12 @@ struct PassthroughSubjectTests {
         subject.send(20)
         
         await task.value
-        #expect(receivedValues == [10, 20])
+        #expect(receivedValues.wrappedValue == [10, 20])
     }
     
     @Test("PassthroughSubject doesn't send initial value to new subscribers")
     func testNoInitialValue() async {
-        let subject = PassthroughSubject<Int, Never>()
+        let subject = PassthroughSubject<Int>()
         subject.send(100) // Send before subscription
         
         let task = Task {
@@ -52,14 +52,14 @@ struct PassthroughSubjectTests {
     
     @Test("Multiple subscribers receive same values")
     func testMultipleSubscribers() async {
-        let subject = PassthroughSubject<String, Never>()
-        var receivedByFirst: [String] = []
-        var receivedBySecond: [String] = []
-        
+        let subject = PassthroughSubject<String>()
+        let receivedByFirst = InlineProperty<[String]>(wrappedValue: [])
+        let receivedBySecond = InlineProperty<[String]>(wrappedValue: [])
+
         let firstTask = Task {
             for await value in subject {
-                receivedByFirst.append(value)
-                if receivedByFirst.count >= 2 {
+                receivedByFirst.wrappedValue.append(value)
+                if receivedByFirst.wrappedValue.count >= 2 {
                     break
                 }
             }
@@ -67,8 +67,8 @@ struct PassthroughSubjectTests {
         
         let secondTask = Task {
             for await value in subject {
-                receivedBySecond.append(value)
-                if receivedBySecond.count >= 2 {
+                receivedBySecond.wrappedValue.append(value)
+                if receivedBySecond.wrappedValue.count >= 2 {
                     break
                 }
             }
@@ -83,18 +83,18 @@ struct PassthroughSubjectTests {
         await firstTask.value
         await secondTask.value
         
-        #expect(receivedByFirst == ["Hello", "World"])
-        #expect(receivedBySecond == ["Hello", "World"])
+        #expect(receivedByFirst.wrappedValue == ["Hello", "World"])
+        #expect(receivedBySecond.wrappedValue == ["Hello", "World"])
     }
     
     @Test("Subject completes properly")
     func testCompletion() async {
-        let subject = PassthroughSubject<Int, Never>()
-        var receivedValues: [Int] = []
-        
+        let subject = PassthroughSubject<Int>()
+        let receivedValues = InlineProperty<[Int]>(wrappedValue: [])
+
         let task = Task {
             for await value in subject {
-                receivedValues.append(value)
+                receivedValues.wrappedValue.append(value)
             }
         }
         
@@ -106,19 +106,19 @@ struct PassthroughSubjectTests {
         subject.send(2) // This should not be received after completion
         
         await task.value
-        #expect(receivedValues == [1])
+        #expect(receivedValues.wrappedValue == [1])
     }
     
     @Test("PassthroughSubject can be erased to AnyAsyncSequence")
     func testEraseToAnyAsyncSequence() async {
-        let subject = PassthroughSubject<Int, Never>()
+        let subject = PassthroughSubject<Int>()
         let erasedSubject = subject.eraseToAnyAsyncSequence()
         
-        var receivedValue: Int?
-        
+        let receivedValue = InlineProperty<Int?>(wrappedValue: nil)
+
         let task = Task {
             for await value in erasedSubject {
-                receivedValue = value
+                receivedValue.wrappedValue = value
                 break
             }
         }
@@ -129,6 +129,6 @@ struct PassthroughSubjectTests {
         subject.send(42)
         
         await task.value
-        #expect(receivedValue == 42)
+        #expect(receivedValue.wrappedValue == 42)
     }
 }
