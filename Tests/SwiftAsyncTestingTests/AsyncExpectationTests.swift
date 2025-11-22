@@ -79,7 +79,6 @@ struct AsyncExpectationTests {
     @Test("AsyncExpectation handles over-fulfillment")
     func testOverFulfillment() async throws {
         try await withKnownIssue {
-
             let expectation = AsyncExpectation(description: "Over-fulfillment test")
             expectation.expectedFulfillmentCount = 1
             expectation.assertForOverFulfill = true
