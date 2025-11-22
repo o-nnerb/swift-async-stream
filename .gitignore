@@ -1,8 +1,36 @@
-.DS_Store
-/.build
-/Packages
-xcuserdata/
+```
+# Build artifacts
+.build/
 DerivedData/
-.swiftpm/configuration/registries.json
-.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
-.netrc
+*.build/
+build/
+
+# Dependencies
+Package.resolved
+Packages/
+.swift-version
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+*.xcuserstate
+xcuserdata/
+*.playground/
+*.swiftpm/
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# Environment
+.env
+.env.local
+.env.*
+!.env.example
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```

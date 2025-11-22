@@ -1,5 +1,7 @@
 import Foundation
 
+/// A synchronization primitive that allows tasks to wait for a signal before continuing execution.
+/// It provides a way to coordinate between different asynchronous tasks.
 public final class AsyncSignal: Sendable {
 
     private final class Storage: @unchecked Sendable {
@@ -26,12 +28,15 @@ public final class AsyncSignal: Sendable {
 
     // MARK: - Inits
 
+    /// Creates a new AsyncSignal instance.
+    /// - Parameter signal: Initial state of the signal. If true, the signal is already triggered.
     public init(_ signal: Bool = false) {
         storage = .init(isLocked: !signal)
     }
 
     // MARK: - Public properties
 
+    /// Triggers the signal, allowing all waiting tasks to continue execution.
     public func signal() {
         storage.lock.withLock {
             storage._isLocked = false
@@ -42,12 +47,14 @@ public final class AsyncSignal: Sendable {
         }
     }
 
+    /// Sets the signal to a locked state, blocking subsequent wait calls until signal() is called.
     public func lock() {
         storage.lock.withLock {
             storage._isLocked = true
         }
     }
 
+    /// Waits for the signal to be triggered. If the signal is already triggered, this method returns immediately.
     public func wait() async {
         let operation = AsyncOperation()
 

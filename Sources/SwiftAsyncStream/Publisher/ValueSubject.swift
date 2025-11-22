@@ -1,5 +1,7 @@
 import Foundation
 
+/// A publisher that broadcasts elements to multiple subscribers and maintains a current value.
+/// Each new subscriber immediately receives the current value upon subscription.
 public struct ValueSubject<Element: Sendable>: Sendable {
 
     private class Storage: @unchecked Sendable {
@@ -40,6 +42,7 @@ public struct ValueSubject<Element: Sendable>: Sendable {
         }
     }
 
+    /// The current value of the subject.
     public var value: Element {
         get { storage.value }
         nonmutating set { storage.value = newValue }
@@ -47,6 +50,8 @@ public struct ValueSubject<Element: Sendable>: Sendable {
 
     private let storage: Storage
 
+    /// Creates a new ValueSubject with an initial value.
+    /// - Parameter element: The initial value for the subject.
     public init(_ element: Element) {
         storage = .init(element)
     }

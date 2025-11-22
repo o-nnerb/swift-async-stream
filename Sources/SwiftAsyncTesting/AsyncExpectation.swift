@@ -4,6 +4,8 @@ import Testing
 import XCTest
 #endif
 
+/// An expectation for use in asynchronous testing.
+/// It allows tests to wait for specific conditions to be met before continuing.
 public struct AsyncExpectation: Sendable {
 
     private class Storage: @unchecked Sendable {
@@ -37,6 +39,7 @@ public struct AsyncExpectation: Sendable {
         private var _isInverted: Bool = false
     }
 
+    /// The number of times this expectation has been fulfilled.
     public var expectedFulfillmentCount: Int {
         get { storage.expectedFulfillmentCount }
         nonmutating set {
@@ -45,11 +48,13 @@ public struct AsyncExpectation: Sendable {
         }
     }
 
+    /// Whether to assert when the expectation is fulfilled more times than expected.
     public var assertForOverFulfill: Bool {
         get { storage.assertForOverFulfill }
         nonmutating set { storage.assertForOverFulfill = newValue }
     }
 
+    /// Whether this expectation is inverted (should fail if fulfilled).
     public var isInverted: Bool {
         get { storage.isInverted }
         nonmutating set { storage.isInverted = newValue }
@@ -65,6 +70,13 @@ public struct AsyncExpectation: Sendable {
     private let line: Int
     private let column: Int
 
+    /// Creates a new AsyncExpectation instance.
+    /// - Parameters:
+    ///   - description: A description of the expectation.
+    ///   - fileID: The file ID where the expectation was created.
+    ///   - filePath: The file path where the expectation was created.
+    ///   - line: The line number where the expectation was created.
+    ///   - column: The column number where the expectation was created.
     public init(
         description: String = #function,
         fileID: String = #fileID,
@@ -79,6 +91,7 @@ public struct AsyncExpectation: Sendable {
         self.column = column
     }
 
+    /// Marks the expectation as fulfilled.
     public func fulfill() {
         guard !storage.isInverted else {
             fulfilledWhenInverted()
@@ -144,6 +157,11 @@ public struct AsyncExpectation: Sendable {
     }
 }
 
+/// Waits for all the provided expectations to be fulfilled within the specified timeout.
+/// - Parameters:
+///   - expectations: An array of AsyncExpectations to wait for.
+///   - timeout: The maximum time to wait for all expectations to be fulfilled, in seconds. Default is 60 seconds.
+/// - Throws: An error if the timeout is reached before all expectations are fulfilled.
 public func expectations(_ expectations: [AsyncExpectation], timeout: TimeInterval = 60) async throws {
     try await withThrowingTaskGroup(of: Void.self) { group in
         for expectation in expectations {

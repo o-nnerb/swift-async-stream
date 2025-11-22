@@ -1,5 +1,6 @@
 import Foundation
 
+/// An async iterator for subject-based publishers that yields elements as they are published.
 public struct SubjectAsyncIterator<Element: Sendable>: AsyncIteratorProtocol, Sendable {
 
     private var node: NodeSubject<Element>?
@@ -8,6 +9,8 @@ public struct SubjectAsyncIterator<Element: Sendable>: AsyncIteratorProtocol, Se
         self.node = node
     }
 
+    /// Advances to the next element and returns it, or nil if no next element exists.
+    /// - Returns: The next element if available, otherwise nil.
     public mutating func next() async -> Element? {
         guard let node else {
             return nil
