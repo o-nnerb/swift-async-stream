@@ -1,36 +1,4 @@
-```
-# Build artifacts
-.build/
-DerivedData/
-*.build/
-build/
-
-# Dependencies
-Package.resolved
-Packages/
-.swift-version
-
-# Xcode
-*.xcodeproj/
-*.xcworkspace/
-*.xcuserstate
-xcuserdata/
-*.playground/
-*.swiftpm/
-
-# Temporary files
-*.tmp
-*.log
-*.swp
-*~
-
-# Environment
-.env
-.env.local
-.env.*
-!.env.example
-
-# OS generated files
-.DS_Store
-Thumbs.db
+```gitignore
+# No build artifacts, dependencies, or temporary files detected in changes
+# Only README.md was added, which should not be ignored
 ```
