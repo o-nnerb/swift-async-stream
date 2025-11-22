@@ -23,7 +23,7 @@ public struct SubjectAsyncIterator<Element: Sendable>: AsyncIteratorProtocol, Se
         switch node.stateDataSource.state {
         case .produced(let element):
             return element
-        case .waiting:
+        case .waiting, .completed:
             return nil
         }
     }

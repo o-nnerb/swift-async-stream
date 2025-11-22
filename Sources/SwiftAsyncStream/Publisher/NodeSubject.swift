@@ -5,6 +5,7 @@ final class NodeSubject<Element: Sendable>: Sendable {
     enum State: Sendable {
         case produced(Element)
         case waiting
+        case completed
     }
 
     final class StateDataSource: @unchecked Sendable {
@@ -57,10 +58,10 @@ final class NodeSubject<Element: Sendable>: Sendable {
     }
 
     func produce(_ element: Element) -> NodeSubject {
-        var topMostNodeReference = self
+        let topMostNodeReference = self.topMostNodeReference()
 
-        while let next = topMostNodeReference.nextDataSource.next {
-            topMostNodeReference = next
+        if case .completed = topMostNodeReference.stateDataSource.state {
+            return topMostNodeReference
         }
 
         topMostNodeReference.stateDataSource.state = .produced(element)
@@ -71,8 +72,22 @@ final class NodeSubject<Element: Sendable>: Sendable {
         return topMostNodeReference
     }
 
-    func completed() {
-        producer.signal()
+    func completed() -> NodeSubject {
+        let topMostNodeReference = self.topMostNodeReference()
+        topMostNodeReference.stateDataSource.state = .completed
+        topMostNodeReference.nextDataSource.next = nil
+        topMostNodeReference.producer.signal()
+        return topMostNodeReference
+    }
+
+    private func topMostNodeReference() -> NodeSubject<Element> {
+        var topMostNodeReference = self
+
+        while let next = topMostNodeReference.nextDataSource.next {
+            topMostNodeReference = next
+        }
+
+        return topMostNodeReference
     }
 
     deinit {

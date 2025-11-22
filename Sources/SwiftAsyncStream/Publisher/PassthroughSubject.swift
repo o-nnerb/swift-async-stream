@@ -12,21 +12,19 @@ public struct PassthroughSubject<Element: Sendable>: Sendable {
 
         init() {}
 
+        deinit {
+            _update(_node.completed())
+        }
+
         func send(_ element: Element) {
             lock.withLock {
-                let node = _node.produce(element)
-
-                if let next = node.nextDataSource.next {
-                    _node = next
-                } else {
-                    _node = node
-                }
+               _update(_node.produce(element))
             }
         }
 
         func completed() {
             lock.withLock {
-                _node.completed()
+                _update(_node.completed())
             }
         }
 
@@ -36,8 +34,12 @@ public struct PassthroughSubject<Element: Sendable>: Sendable {
             }
         }
 
-        deinit {
-            _node.completed()
+        private func _update(_ node: NodeSubject<Element>) {
+            if let next = node.nextDataSource.next {
+                _node = next
+            } else {
+                _node = node
+            }
         }
     }
 
