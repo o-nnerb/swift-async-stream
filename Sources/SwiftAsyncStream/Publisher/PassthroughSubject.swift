@@ -1,5 +1,7 @@
 import Foundation
 
+/// A publisher that broadcasts elements to multiple subscribers.
+/// It doesn't store any values, so subscribers only receive elements published after subscription.
 public struct PassthroughSubject<Element: Sendable>: Sendable {
 
     private class Storage: @unchecked Sendable {
@@ -41,12 +43,16 @@ public struct PassthroughSubject<Element: Sendable>: Sendable {
 
     private let storage = Storage()
 
+    /// Creates a new PassthroughSubject instance.
     public init() {}
 
+    /// Publishes a new element to all subscribers.
+    /// - Parameter element: The element to publish.
     public func send(_ element: Element) {
         storage.send(element)
     }
 
+    /// Signals that the publisher has finished publishing values.
     public func completed() {
         storage.completed()
     }
