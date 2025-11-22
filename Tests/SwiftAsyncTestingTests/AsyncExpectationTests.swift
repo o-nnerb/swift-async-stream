@@ -60,31 +60,40 @@ struct AsyncExpectationTests {
     
     @Test("Inverted expectation fails when fulfilled")
     func testInvertedExpectation() async {
-        let expectation = AsyncExpectation(description: "Inverted test")
-        expectation.isInverted = true
-        
-        Task {
-            try? await Task.sleep(nanoseconds: 25_000_000)
-            expectation.fulfill() // This should cause a test failure
+        await withKnownIssue {
+            let expectation = AsyncExpectation(description: "Inverted test")
+            expectation.isInverted = true
+
+            Task {
+                try? await Task.sleep(nanoseconds: 25_000_000)
+                expectation.fulfill() // This should cause a test failure
+            }
+
+            // We expect this to record an issue since the inverted expectation was fulfilled
+            try? await expectations([expectation], timeout: 1.0)
+        } matching: { issue in
+            issue.comments.contains("Inverted expectation was fulfilled, which is a failure.")
         }
-        
-        // We expect this to record an issue since the inverted expectation was fulfilled
-        try? await expectations([expectation], timeout: 1.0)
     }
     
     @Test("AsyncExpectation handles over-fulfillment")
     func testOverFulfillment() async throws {
-        let expectation = AsyncExpectation(description: "Over-fulfillment test")
-        expectation.expectedFulfillmentCount = 1
-        expectation.assertForOverFulfill = true
-        
-        Task {
-            try? await Task.sleep(nanoseconds: 25_000_000)
-            expectation.fulfill() // First fulfillment
-            expectation.fulfill() // This should trigger an assertion
+        try await withKnownIssue {
+
+            let expectation = AsyncExpectation(description: "Over-fulfillment test")
+            expectation.expectedFulfillmentCount = 1
+            expectation.assertForOverFulfill = true
+
+            Task {
+                try? await Task.sleep(nanoseconds: 25_000_000)
+                expectation.fulfill() // First fulfillment
+                expectation.fulfill() // This should trigger an assertion
+            }
+
+            try await expectations([expectation], timeout: 5.0)
+        } matching: { issue in
+            issue.comments.contains("Expected fulfill count to be 1, got 2.")
         }
-        
-        try await expectations([expectation], timeout: 5.0)
     }
     
     @Test("AsyncExpectation works with Task timeout")

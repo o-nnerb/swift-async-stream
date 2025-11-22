@@ -38,7 +38,7 @@ public struct ValueSubject<Element: Sendable>: Sendable {
         }
 
         deinit {
-            _node.completed()
+            _node = _node.completed()
         }
     }
 
