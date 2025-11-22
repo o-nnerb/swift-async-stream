@@ -23,6 +23,14 @@ let package = Package(
         .target(
             name: "SwiftAsyncTesting",
             dependencies: ["SwiftAsyncStream"]
+        ),
+        .testTarget(
+            name: "SwiftAsyncStreamTests",
+            dependencies: ["SwiftAsyncStream"]
+        ),
+        .testTarget(
+            name: "SwiftAsyncTestingTests",
+            dependencies: ["SwiftAsyncTesting"]
         )
     ]
 )

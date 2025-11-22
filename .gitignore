@@ -2,35 +2,23 @@
 # Build artifacts
 .build/
 DerivedData/
-*.build/
-build/
 
 # Dependencies
+.swiftpm/
 Package.resolved
-Packages/
-.swift-version
 
-# Xcode
-*.xcodeproj/
-*.xcworkspace/
-*.xcuserstate
-xcuserdata/
-*.playground/
-*.swiftpm/
-
-# Temporary files
-*.tmp
-*.log
+# Editor/IDE
+.vscode/
+.idea/
 *.swp
-*~
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
 
 # Environment
 .env
 .env.local
-.env.*
-!.env.example
-
-# OS generated files
-.DS_Store
-Thumbs.db
+*.env.*
 ```
