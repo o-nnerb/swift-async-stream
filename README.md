@@ -90,9 +90,58 @@ Task {
                                                                                                                                                                                                                                                                             valueSubject.value = 5
 ```
 
+## AsyncExpectation
+
+In addition to the reactive programming utilities, this repository also includes `AsyncExpectation`, which addresses a significant gap in Swift Testing. The Swift Testing framework currently lacks an equivalent to the `XCTestExpectation` functionality that XCTest provides.
+
+### The Problem
+
+When writing asynchronous tests, developers often need to wait for specific conditions or events to occur before continuing with the test. In XCTest, this is commonly handled with `XCTestExpectation`:
+
+```swift
+func testAsyncOperation() async {
+    let expectation = XCTestExpectation(description: "Async operation completes")
+    
+    // Perform async operation that calls expectation.fulfill() when done
+    
+    wait(for: [expectation], timeout: 10.0)
+}
+```
+
+However, Swift Testing doesn't provide a similar mechanism, making it difficult to write tests that need to wait for asynchronous events.
+
+### The Solution
+
+`AsyncExpectation` fills this gap by providing similar functionality for Swift Testing:
+
+```swift
+import SwiftAsyncTesting
+
+func testAsyncOperation() async throws {
+    let expectation = AsyncExpectation(description: "Async operation completes")
+    
+    Task {
+        // Perform some async operation
+        await someAsyncFunction()
+        expectation.fulfill()  // Signal that the condition is met
+    }
+    
+    // Wait for the expectation to be fulfilled
+    try await expectations([expectation], timeout: 10.0)
+}
+```
+
+### Key Features
+
+- **Compatibility**: Works with both Swift Testing and XCTest frameworks
+- **Timeout Support**: Built-in timeout functionality to prevent hanging tests
+- **Multiple Expectations**: Ability to wait for multiple expectations simultaneously
+- **Inverted Expectations**: Support for inverted expectations that fail if fulfilled
+- **Thread-Safe**: Safe to use across different tasks and threads
+
 ## Purpose
 
-This repository serves as a study material and a way to share possibilities with the community. It demonstrates how to implement reactive programming patterns in Swift's async ecosystem, providing functionality similar to Combine's subjects but adapted for async sequences.
+This repository serves as a study material and a way to share possibilities with the community. It demonstrates how to implement reactive programming patterns in Swift's async ecosystem, providing functionality similar to Combine's subjects but adapted for async sequences. Additionally, it addresses the missing expectation functionality in Swift Testing, offering a solution similar to XCTest/expectation for asynchronous testing scenarios.
 
 ## License
 
