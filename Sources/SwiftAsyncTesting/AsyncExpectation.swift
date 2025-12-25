@@ -31,7 +31,7 @@ public struct AsyncExpectation: Sendable {
         }
 
 
-        private let lock = NSLock()
+        private let lock = Lock()
 
         private var _fulfillmentCount: Int = .zero
         private var _expectedFulfillmentCount: Int = 1

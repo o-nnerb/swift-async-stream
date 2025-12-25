@@ -8,7 +8,7 @@ final class AsyncOperation: @unchecked Sendable {
         case cancelled
     }
 
-    private let lock = NSLock()
+    private let lock = Lock()
     private var _state: State = .idle
 
     init() {}

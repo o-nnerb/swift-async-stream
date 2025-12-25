@@ -6,7 +6,7 @@ public final class AsyncSignal: Sendable {
 
     private final class Storage: @unchecked Sendable {
 
-        let lock = NSLock()
+        let lock = Lock()
 
         var _isLocked = false
         var _pendingOperations = [AsyncOperation]()
