@@ -9,7 +9,7 @@ struct InlineProperty<Value>: Sendable {
             set { lock.withLock { _wrappedValue = newValue } }
         }
 
-        private let lock = NSLock()
+        private let lock = Lock()
 
         private var _wrappedValue: Value
 

@@ -18,7 +18,7 @@ final class AsyncOperation: @unchecked Sendable {
         }
     }
 
-    private let lock = NSLock()
+    private let lock = Lock()
     private var _state: State = .idle
 
     init() {}

@@ -18,7 +18,7 @@ public final class AsyncLock: Sendable {
 
     // MARK: - Private properties
 
-    private let lock = NSLock()
+    private let lock = Lock()
 
     // MARK: - Unsafe properties
 

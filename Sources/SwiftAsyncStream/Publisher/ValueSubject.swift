@@ -23,7 +23,7 @@ public struct ValueSubject<Element: Sendable>: Sendable {
             }
         }
 
-        private let lock = NSLock()
+        private let lock = Lock()
 
         private var _node: NodeSubject<Element>
 

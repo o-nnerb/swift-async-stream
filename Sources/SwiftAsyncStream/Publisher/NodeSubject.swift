@@ -15,7 +15,7 @@ final class NodeSubject<Element: Sendable>: Sendable {
             set { lock.withLock { _state = newValue }}
         }
 
-        private let lock = NSLock()
+        private let lock = Lock()
 
         private var _state: State
 
@@ -31,7 +31,7 @@ final class NodeSubject<Element: Sendable>: Sendable {
             set { lock.withLock { _next = newValue }}
         }
 
-        private let lock = NSLock()
+        private let lock = Lock()
 
         private var _next: NodeSubject?
 
