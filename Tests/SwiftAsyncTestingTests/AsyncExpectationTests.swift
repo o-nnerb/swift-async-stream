@@ -79,6 +79,7 @@ struct AsyncExpectationTests {
     @Test("AsyncExpectation handles over-fulfillment")
     func testOverFulfillment() async throws {
         try await withKnownIssue {
+            let assertionTracker = AsyncExpectation()
             let expectation = AsyncExpectation(description: "Over-fulfillment test")
             expectation.expectedFulfillmentCount = 1
             expectation.assertForOverFulfill = true
@@ -87,9 +88,10 @@ struct AsyncExpectationTests {
                 try? await Task.sleep(nanoseconds: 25_000_000)
                 expectation.fulfill() // First fulfillment
                 expectation.fulfill() // This should trigger an assertion
+                assertionTracker.fulfill()
             }
 
-            try await expectations([expectation], timeout: 5.0)
+            try await expectations([expectation, assertionTracker], timeout: 5.0)
         } matching: { issue in
             issue.comments.contains("Expected fulfill count to be 1, got 2.")
         }
