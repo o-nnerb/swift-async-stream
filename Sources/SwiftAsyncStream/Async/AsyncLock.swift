@@ -6,7 +6,7 @@ public final class AsyncLock: Sendable {
 
     private final class Storage: @unchecked Sendable {
 
-        var isLocked = false
+        var runningOperation: AsyncOperation?
         var pendingOperations = [AsyncOperation]()
 
         deinit {
@@ -23,6 +23,8 @@ public final class AsyncLock: Sendable {
     // MARK: - Unsafe properties
 
     private let _storage = Storage()
+
+    // MARK: - Inits
 
     /// Creates a new AsyncLock instance.
     public init() {}
@@ -50,59 +52,92 @@ public final class AsyncLock: Sendable {
 
     /// Unlocks the lock and allows the next waiting operation to proceed.
     public func unlock() {
-        lock.withLock {
-            guard _storage.isLocked else {
-                return
-            }
+        let runningOperation = lock.withLock { () -> AsyncOperation? in
+            guard
+                let  runningOperation = _storage.runningOperation,
+                [.cancelled, .finished].contains(runningOperation.state)
+            else { return nil }
 
-            var scheduledOperation: AsyncOperation?
+            var pendingOperation: AsyncOperation?
 
             while let operation = _storage.pendingOperations.popLast() {
-                if !operation.isScheduled {
+                if operation.state != .waiting {
                     continue
                 }
 
-                scheduledOperation = operation
+                pendingOperation = operation
                 break
             }
 
-            _storage.isLocked = !_storage.pendingOperations.isEmpty
-
-            scheduledOperation?.resume()
+            _storage.runningOperation = pendingOperation
+            return pendingOperation
         }
+
+        runningOperation?.resume()
     }
 
     /// Acquires the lock. If the lock is already held by another task, this method will suspend
     /// until the lock becomes available.
-    public func lock() async {
+    public func lock(isolation: isolated (any Actor)? = #isolation) async {
         let operation = AsyncOperation()
 
         let lock = lock
+        #if swift(>=6.2.3)
+        weak let storage = _storage
+        #else
         weak var storage = _storage
+        #endif
 
-        await withTaskCancellationHandler {
-            await withUnsafeContinuation {
-                operation.schedule($0)
+        await withTaskCancellationHandler(
+            operation: {
+                await withUnsafeContinuation(isolation: isolation) {
+                    operation.schedule($0)
 
-                lock.withLock {
-                    guard let storage else {
-                        operation.resume()
-                        return
+                    let runningOperation = lock.withLock { () -> AsyncOperation? in
+                        guard let storage else {
+                            return operation
+                        }
+
+                        guard storage.runningOperation != nil else {
+                            storage.runningOperation = operation
+                            return operation
+                        }
+
+                        storage.pendingOperations.insert(operation, at: .zero)
+                        return nil
                     }
 
-                    guard storage.isLocked else {
-                        storage.isLocked = true
-                        operation.resume()
-                        return
-                    }
-
-                    storage.pendingOperations.insert(operation, at: .zero)
+                    runningOperation?.resume()
                 }
-            }
-        } onCancel: {
-            lock.withLock {
-                operation.cancelled()
-            }
-        }
+            },
+            onCancel: { [weak self] in
+                #if swift(<6.2.3)
+                let storage = self?._storage
+                #endif
+
+                Task.detached {
+                    guard let self else {
+                        return
+                    }
+
+                    operation.cancelled()
+
+                    let didCancelRunningOperation = lock.withLock {
+                        guard let storage else {
+                            return false
+                        }
+
+                        return operation === storage.runningOperation
+                    }
+
+                    guard didCancelRunningOperation else {
+                        return
+                    }
+
+                    self.unlock()
+                }
+            },
+            isolation: isolation
+        )
     }
 }
