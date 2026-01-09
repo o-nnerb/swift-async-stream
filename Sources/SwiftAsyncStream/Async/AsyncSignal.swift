@@ -61,7 +61,7 @@ public final class AsyncSignal: Sendable {
     }
 
     /// Waits for the signal to be triggered. If the signal is already triggered, this method returns immediately.
-    public func wait() async {
+    public func wait(isolation: isolated (any Actor)? = #isolation) async {
         let operation = AsyncOperation()
 
         let lock = locker
@@ -72,27 +72,31 @@ public final class AsyncSignal: Sendable {
         weak var storage = _storage
         #endif
 
-        await withTaskCancellationHandler {
-            await withUnsafeContinuation {
-                operation.schedule($0)
+        await withTaskCancellationHandler(
+            operation: {
+                await withUnsafeContinuation(isolation: isolation) {
+                    operation.schedule($0)
 
-                let operation = lock.withLock { () -> AsyncOperation? in
-                    guard let storage, storage.isLocked else {
-                        return operation
+                    let operation = lock.withLock { () -> AsyncOperation? in
+                        guard let storage, storage.isLocked else {
+                            return operation
+                        }
+
+                        storage.pendingOperations.insert(operation, at: .zero)
+                        return nil
                     }
 
-                    storage.pendingOperations.insert(operation, at: .zero)
-                    return nil
+                    operation?.resume()
                 }
-
-                operation?.resume()
-            }
-        } onCancel: {
-            Task.detached {
-                lock.withLock {
-                    operation.cancelled()
+            },
+            onCancel: {
+                Task.detached {
+                    lock.withLock {
+                        operation.cancelled()
+                    }
                 }
-            }
-        }
+            },
+            isolation: isolation
+        )
     }
 }

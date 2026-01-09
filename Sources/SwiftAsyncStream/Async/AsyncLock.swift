@@ -35,7 +35,7 @@ public final class AsyncLock: Sendable {
     /// - Parameter block: The closure to execute while holding the lock.
     /// - Returns: The result of the closure.
     public func withLock<Value: Sendable>(isolation: isolated (any Actor)? = #isolation, _ block: @Sendable () async throws -> Value) async rethrows -> Value {
-        await lock()
+        await lock(isolation: isolation)
         defer { unlock() }
 
         return try await block()
@@ -44,7 +44,7 @@ public final class AsyncLock: Sendable {
     /// Executes the provided closure while maintaining the lock, without returning a value.
     /// - Parameter block: The closure to execute while holding the lock.
     public func withLockVoid(isolation: isolated (any Actor)? = #isolation, _ block: @Sendable () async throws -> Void) async rethrows {
-        await lock()
+        await lock(isolation: isolation)
         defer { unlock() }
 
         try await block()
