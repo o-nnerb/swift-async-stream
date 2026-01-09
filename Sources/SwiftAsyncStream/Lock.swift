@@ -59,7 +59,7 @@ private extension Lock {
             #if !canImport(Darwin)
             var attr = pthread_mutexattr_t()
             pthread_mutexattr_init(&attr)
-            pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK)
+            pthread_mutexattr_settype(&attr, .init(PTHREAD_MUTEX_ERRORCHECK))
             pthread_mutex_init(&mutex, &attr)
             pthread_mutexattr_destroy(&attr)
             #endif
