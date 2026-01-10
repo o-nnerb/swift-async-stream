@@ -152,7 +152,11 @@ public struct AsyncExpectation: Sendable {
                 )
             )
         } else {
+            #if canImport(Darwin)
             XCTFail(message)
+            #else
+            print(message)
+            #endif
         }
     }
 }
