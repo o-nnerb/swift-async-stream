@@ -114,7 +114,9 @@ public final class AsyncLock: Sendable {
                 }
             },
             onCancel: { [weak self] in
-                #if swift(<6.2.3)
+                #if swift(>=6.2.3)
+                let storage = storage
+                #else
                 let storage = self?._storage
                 #endif
 
