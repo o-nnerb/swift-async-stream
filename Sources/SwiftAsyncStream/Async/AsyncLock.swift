@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 import Foundation
 
 /// A synchronization primitive that provides mutual exclusion for asynchronous operations.
@@ -120,9 +123,9 @@ public final class AsyncLock: Sendable {
                         return
                     }
 
-                    operation.cancelled()
-
                     let didCancelRunningOperation = lock.withLock {
+                        operation.cancelled()
+
                         guard let storage else {
                             return false
                         }

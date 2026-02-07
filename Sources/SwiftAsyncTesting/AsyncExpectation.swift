@@ -166,7 +166,7 @@ public struct AsyncExpectation: Sendable {
 ///   - expectations: An array of AsyncExpectations to wait for.
 ///   - timeout: The maximum time to wait for all expectations to be fulfilled, in seconds. Default is 60 seconds.
 /// - Throws: An error if the timeout is reached before all expectations are fulfilled.
-public func expectations(_ expectations: [AsyncExpectation], timeout: TimeInterval = 60) async throws {
+public func expectations(_ expectations: [AsyncExpectation], timeout: Double = 60) async throws {
     try await withThrowingTaskGroup(of: Void.self) { group in
         for expectation in expectations {
             group.addTask {

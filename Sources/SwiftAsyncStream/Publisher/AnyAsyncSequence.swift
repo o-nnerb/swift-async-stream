@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 import Foundation
 
 extension AsyncSequence where Element: Sendable, AsyncIterator: Sendable, Self: Sendable {

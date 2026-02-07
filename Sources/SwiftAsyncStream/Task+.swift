@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 import Foundation
 
 /// Executes an asynchronous operation with a timeout.
@@ -10,7 +13,7 @@ import Foundation
 /// - Throws: CancellationError if the timeout is reached, or any error thrown by the operation.
 @discardableResult
 public func withTaskTimeout<Value: Sendable>(
-    seconds: TimeInterval,
+    seconds: Double,
     of valueType: Value.Type = Value.self,
     body: @Sendable @escaping () async throws -> Value
 ) async throws -> Value {
