@@ -10,7 +10,7 @@ import Foundation
 /// - Throws: CancellationError if the timeout is reached, or any error thrown by the operation.
 @discardableResult
 public func withTaskTimeout<Value: Sendable>(
-    seconds: TimeInterval,
+    seconds: Double,
     of valueType: Value.Type = Value.self,
     body: @Sendable @escaping () async throws -> Value
 ) async throws -> Value {
