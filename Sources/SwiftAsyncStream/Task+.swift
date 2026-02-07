@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 import Foundation
 
 /// Executes an asynchronous operation with a timeout.
