@@ -201,7 +201,7 @@ private extension Lock {
             pthread_mutexattr_init(&attr)
             debugOnly {
                 #if !os(OpenBSD)
-                pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK)
+                pthread_mutexattr_settype(&attr, .init(PTHREAD_MUTEX_ERRORCHECK))
                 #endif
             }
             let err = pthread_mutex_init(ptr, &attr)
