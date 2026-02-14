@@ -1,7 +1,11 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 
 /// A synchronization primitive that provides mutual exclusion for asynchronous operations.
 /// It allows only one task to access a critical section at a time.

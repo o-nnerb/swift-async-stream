@@ -1,7 +1,11 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 
 /// A synchronization primitive that allows tasks to wait for a signal before continuing execution.
 /// It provides a way to coordinate between different asynchronous tasks.

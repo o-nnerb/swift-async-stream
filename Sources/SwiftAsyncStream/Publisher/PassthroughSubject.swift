@@ -1,7 +1,11 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 
 /// A publisher that broadcasts elements to multiple subscribers.
 /// It doesn't store any values, so subscribers only receive elements published after subscription.

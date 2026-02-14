@@ -1,7 +1,11 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 
 /// Executes an asynchronous operation with a timeout.
 /// If the operation doesn't complete within the specified time, it will be cancelled.
