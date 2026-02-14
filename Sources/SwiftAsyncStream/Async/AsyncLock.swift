@@ -35,6 +35,7 @@ public final class AsyncLock: Sendable {
     // MARK: - Public properties
 
     /// Executes the provided closure while maintaining the lock.
+    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter block: The closure to execute while holding the lock.
     /// - Returns: The result of the closure.
     public func withLock<Value: Sendable>(isolation: isolated (any Actor)? = #isolation, _ block: @Sendable () async throws -> Value) async rethrows -> Value {
@@ -45,6 +46,7 @@ public final class AsyncLock: Sendable {
     }
 
     /// Executes the provided closure while maintaining the lock, without returning a value.
+    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter block: The closure to execute while holding the lock.
     public func withLockVoid(isolation: isolated (any Actor)? = #isolation, _ block: @Sendable () async throws -> Void) async rethrows {
         await lock(isolation: isolation)
@@ -57,7 +59,7 @@ public final class AsyncLock: Sendable {
     public func unlock() {
         let runningOperation = lock.withLock { () -> AsyncOperation? in
             guard
-                let  runningOperation = _storage.runningOperation,
+                let runningOperation = _storage.runningOperation,
                 [.cancelled, .finished].contains(runningOperation.state)
             else { return nil }
 
@@ -114,35 +116,31 @@ public final class AsyncLock: Sendable {
                 }
             },
             onCancel: { [weak self] in
-                #if swift(>=6.2.3)
-                let storage = storage
-                #else
-                let storage = self?._storage
-                #endif
-
-                Task.detached {
-                    guard let self else {
-                        return
-                    }
-
-                    let didCancelRunningOperation = lock.withLock {
-                        operation.cancelled()
-
-                        guard let storage else {
-                            return false
-                        }
-
-                        return operation === storage.runningOperation
-                    }
-
-                    guard didCancelRunningOperation else {
-                        return
-                    }
-
-                    self.unlock()
+                guard let self else {
+                    return
                 }
+
+                self.cleanup(operation)
             },
             isolation: isolation
         )
+    }
+
+    private func cleanup(_ operation: AsyncOperation) {
+        let lock = lock
+        let storage = _storage
+
+        Task.detached {
+            let didCancelRunningOperation = lock.withLock {
+                operation.cancelled()
+                return operation === storage.runningOperation
+            }
+
+            guard didCancelRunningOperation else {
+                return
+            }
+
+            self.unlock()
+        }
     }
 }
