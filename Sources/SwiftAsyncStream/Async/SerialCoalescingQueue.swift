@@ -13,11 +13,15 @@ import Foundation
 public protocol CoalescingJob: Equatable, Sendable {
 
     /// Whether equal jobs queued back to back may share one execution.
+    ///
+    /// Defaults to `true`. Conforming types can return `false` to opt out of
+    /// coalescing, ensuring that every submitted instance gets its own execution.
     var isCoalescable: Bool { get }
 }
 
 public extension CoalescingJob {
 
+    /// A default implementation that allows equal adjacent jobs to share an execution.
     var isCoalescable: Bool { true }
 }
 
@@ -36,6 +40,10 @@ public extension CoalescingJob {
 /// execution started.
 public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
 
+    /// A closure that performs the work for a given `Job`.
+    ///
+    /// The operation receives the job to be executed and must be `Sendable`
+    /// since it will be executed within an actor's isolated context.
     public typealias Operation = @Sendable (Job) async throws -> Output
 
     fileprivate struct Waiter {
@@ -53,8 +61,21 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
     private var isRunning = false
     private var drainTask: Task<Void, Never>?
 
+    /// Creates a new, empty queue.
     public init() {}
 
+    /// Submits a job to the queue to be executed.
+    ///
+    /// If the queue is empty or the last job in the queue is different (or not coalescable),
+    /// the job is appended to the queue. If the last job is equal and coalescable,
+    /// the current call simply joins the existing batch and waits for its result.
+    ///
+    /// - Parameters:
+    ///   - job: The work unit to be submitted.
+    ///   - operation: The closure that executes the job and returns a result.
+    /// - Returns: The output produced by the `operation`.
+    /// - Throws: Any error thrown by the `operation`, or `CancellationError` if the task
+    ///           is cancelled before or during execution.
     public func submit(_ job: Job, operation: @escaping Operation) async throws -> Output {
         let id = UUID()
 
@@ -119,14 +140,30 @@ public extension SerialCoalescingQueue {
     }
 }
 
+/// An error thrown when `waitForPendingWaiters` exceeds its timeout.
+///
+/// This usually indicates a race condition or a deadlock in tests where
+/// tasks are not being enqueued as expected.
 @_spi(Testing)
 public struct PendingWaitersTimeout: Error, CustomStringConvertible {
 
-    let expected: Int
-    let found: Int
+    /// The number of pending waiters the test expected to find.
+    public let expected: Int
+
+    /// The actual number of pending waiters found when the timeout occurred.
+    public let found: Int
 
     public var description: String {
         "Timed out waiting for \(expected) pending waiters, found \(found)"
+    }
+
+    /// Creates a new timeout error.
+    /// - Parameters:
+    ///   - expected: The expected number of pending waiters.
+    ///   - found: The actual number of pending waiters found.
+    init(expected: Int, found: Int) {
+        self.expected = expected
+        self.found = found
     }
 }
 
