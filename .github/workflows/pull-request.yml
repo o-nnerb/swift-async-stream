@@ -1,0 +1,171 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Bump together with the swift-tools-version in Package.swift. Must be an Xcode that ships
+  # Swift 6.2 or newer.
+  XCODE_VERSION: "26.6"
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # macOS: the only platform where the test suite actually runs.
+  # ---------------------------------------------------------------------------------------------
+  macos:
+    name: macOS · Swift ${{ matrix.swift }} · ${{ matrix.configuration }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.2"]
+        configuration: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build -c ${{ matrix.configuration }} --build-tests
+
+      # `-enable-testing` keeps @testable working in release, where the optimizer and
+      # exclusivity checking behave differently from debug. Concurrency bugs love that gap.
+      - name: Test
+        run: |
+          if [ "${{ matrix.configuration }}" = "release" ]; then
+            swift test -c release -Xswiftc -enable-testing
+          else
+            swift test
+          fi
+
+  # ---------------------------------------------------------------------------------------------
+  # Sanitizers: the highest value job in this workflow for a concurrency package.
+  # Thread sanitizer catches unsynchronised access that no amount of green tests will.
+  # ---------------------------------------------------------------------------------------------
+  sanitizers:
+    name: macOS · ${{ matrix.sanitizer }} sanitizer
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [thread, address]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Test
+        run: swift test --sanitize=${{ matrix.sanitizer }}
+
+  # ---------------------------------------------------------------------------------------------
+  # Apple platforms: build only. Catches availability mistakes that a macOS only build hides,
+  # which matters here because the lowest deployment targets predate Duration and ContinuousClock.
+  # ---------------------------------------------------------------------------------------------
+  apple-platforms:
+    name: Build · ${{ matrix.platform }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iOS, tvOS, watchOS]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -scheme SwiftAsyncStream-Package \
+            -destination "generic/platform=${{ matrix.platform }}" \
+            -skipMacroValidation \
+            2>&1 | xcbeautify --renderer github-actions
+
+  # ---------------------------------------------------------------------------------------------
+  # Linux: exercises the pthread branch of Lock, which no Apple job ever compiles.
+  # ---------------------------------------------------------------------------------------------
+  linux:
+    name: Linux · ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: swift:6.2-jammy
+            experimental: false
+          - image: swift:6.2-noble
+            experimental: false
+          # Early warning for the next toolchain. Allowed to fail.
+          - image: swiftlang/swift:nightly-main-noble
+            experimental: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Test
+        run: swift test
+
+      - name: Build release
+        run: swift build -c release
+
+  # ---------------------------------------------------------------------------------------------
+  # Windows: exercises the SRWLOCK branch of Lock. Drop this job together with that branch if
+  # Windows is not a supported platform.
+  # ---------------------------------------------------------------------------------------------
+  windows:
+    name: Windows · Swift 6.2
+    runs-on: windows-2022
+    steps:
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
+
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Test
+        run: swift test
+
+  # ---------------------------------------------------------------------------------------------
+  # Single required check, so branch protection does not need updating every time the matrix does.
+  # ---------------------------------------------------------------------------------------------
+  required:
+    name: Required checks
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [macos, sanitizers, apple-platforms, linux, windows]
+    steps:
+      - name: Verify
+        run: |
+          if echo '${{ toJSON(needs) }}' | grep -q '"result": *"failure"'; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
