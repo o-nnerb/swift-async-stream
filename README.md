@@ -160,13 +160,21 @@ why they return continuations out of their locked sections instead of resuming t
 
 ## Subjects
 
-Both subjects broadcast to every subscriber. Unlike `AsyncChannel`, a value is not consumed by
+All three broadcast to every subscriber. Unlike `AsyncChannel`, a value is not consumed by
 whichever iterator gets there first.
+
+They are the same machinery with one difference: where a new subscriber joins the chain of
+published elements.
+
+| Subject | Joins at | Sees |
+|---|---|---|
+| `EventSubject` | the tail | only what is published after it subscribes |
+| `ValueSubject` | the latest element | the current value, then everything after |
+| `ReplaySubject` | the head | everything still buffered, then everything after |
 
 ### `EventSubject`
 
-Broadcasts values without storing them. Subscribers only receive what is published after they
-subscribe.
+Broadcasts values without storing them.
 
 ```swift
 let subject = EventSubject<Int>()
@@ -204,11 +212,43 @@ print(subject.value)   // 2
 Reading `value` cannot fail. The current value is stored alongside the chain rather than read
 back out of it.
 
-### Buffering policy
+### `ReplaySubject`
+
+Replays what it still holds to every new subscriber, then continues live.
+
+```swift
+let subject = ReplaySubject<Int>(bufferingPolicy: .bufferingNewest(10))
+
+subject.send(1)
+subject.send(2)
+
+for await value in subject {   // receives 1, 2, then whatever follows
+    print(value)
+}
+```
+
+`bufferingPolicy` has no default here, unlike the other two. They only retain elements while a
+subscriber is behind, so a reader that keeps up lets them go. This one is obliged to hold its
+window whether anyone is reading or not, which makes `.unbounded` a commitment to grow for the
+lifetime of the subject rather than a mild default. The choice belongs at the call site.
+
+---
+
+## Buffering policy
 
 Elements live in a chain that every subscriber walks forward, so the chain can only be released
 once the slowest subscriber moves past it. Without a bound, one stalled subscriber pins every
 element published since it stalled.
+
+| Policy | `EventSubject` / `ValueSubject` | `ReplaySubject` |
+|---|---|---|
+| `.unbounded` | default | supported |
+| `.bufferingNewest(n)` | supported | supported |
+| `.untilFirstIteration` | traps at init | supported, single use |
+
+### `.bufferingNewest(n)`
+
+Keeps at most `n` elements, discarding the oldest first.
 
 ```swift
 let frames = EventSubject<Frame>(bufferingPolicy: .bufferingNewest(64))
@@ -217,18 +257,55 @@ let frames = EventSubject<Frame>(bufferingPolicy: .bufferingNewest(64))
 A subscriber that falls past the limit is woken and skips forward, observing a gap rather than
 stalling. The producer never suspends.
 
-`.bufferingNewest(1)` on a `ValueSubject` makes it conflating: a slow subscriber always jumps
-straight to the latest value.
+On a `ValueSubject`, `.bufferingNewest(1)` makes it conflating: a slow subscriber always jumps
+straight to the latest value. On a `ReplaySubject` it means "replay the last n".
+
+There is no `.bufferingOldest`. For a broadcast subject it would mean hiding the newest value
+from subscribers that are up to date, which is the opposite of the point.
+
+### `.untilFirstIteration`
+
+Keeps everything until the first iterator is created, then hands the buffer to that consumer and
+stops holding anything.
 
 ```swift
-let state = ValueSubject(initial, bufferingPolicy: .bufferingNewest(1))
+let body = ReplaySubject<Data>(bufferingPolicy: .untilFirstIteration)
 ```
 
-The default is `.unbounded`, which is correct when every subscriber must see every value and you
-control how long they can stall. There is no `.bufferingOldest`: for a broadcast subject it would
-mean hiding the newest value from subscribers that are up to date.
+This is for the common shape where a subject has to tolerate a late first reader but is only ever
+read once. A response body is the canonical case: bytes start arriving long before the caller
+reaches for them, so nothing can be dropped up front, but once reading starts there is no reason
+to keep what has already been consumed. Retained memory goes from "everything ever published" to
+"the gap between producer and reader".
 
-### Type erasure
+The prefix kept before the first iteration is unbounded. Capping it would discard exactly what the
+mode exists to preserve.
+
+**Single use.** A second iterator has nothing left to replay, so `makeAsyncIterator()` traps
+rather than quietly handing back whatever survived, which would be a partial result that varies
+with how far the first reader got.
+
+A wrapper with an error channel of its own can report the misuse instead:
+
+```swift
+func makeAsyncIterator() -> AsyncIterator {
+    guard let iterator = subject.makeIteratorIfAvailable() else {
+        return .init(failing: AlreadyConsumedError())
+    }
+
+    return .init(iterator)
+}
+```
+
+`makeIteratorIfAvailable()` returns `nil` only under this policy, and only after the handover.
+
+Only `ReplaySubject` can honour it. The other subjects join at the tail or at the latest element,
+never at the head, so they would hold the buffer forever and never release it. Passing it to them
+traps at construction.
+
+---
+
+## Type erasure
 
 ```swift
 let sequence = subject.eraseToAnyAsyncSequence()
@@ -290,6 +367,29 @@ Two contracts worth knowing. `operation` must be a function of `job`, because wh
 submissions coalesce only the first closure runs. And the queue is serial with no reentrancy: an
 operation that submits back into the same queue deadlocks.
 
+### `FIFOQueue`
+
+A first in, first out queue with amortized constant time at both ends, and the one the primitives
+above use for their waiter lists.
+
+```swift
+var queue = FIFOQueue<Job>()
+
+queue.append(job)
+
+while let job = queue.popFirst() {
+    run(job)
+}
+```
+
+`Array` is quadratic for this: `removeFirst()` shifts everything left, and `insert(at: 0)` shifts
+everything right. Here the front is a cursor that only moves forward, and the storage is rebuilt
+only once enough of it has gone dead. Vacated slots are cleared, so a dequeued element is released
+immediately rather than lingering until the next compaction, which matters when the elements are
+closures or objects holding onto something expensive.
+
+No synchronization of its own. Guard it the way you would guard an `Array`.
+
 ---
 
 ## Testing
@@ -338,6 +438,21 @@ An inverted expectation that is fulfilled fails immediately. One that is never f
 be confirmed by waiting the timeout out, so pass a short explicit timeout instead of relying on
 the 60 second default.
 
+### Deterministic queue shapes
+
+Creating a `Task` schedules it, it does not run it, so a test that needs a known queue order has
+to admit one waiter at a time and confirm each arrival. `AsyncLock`, `AsyncSemaphore` and
+`SerialCoalescingQueue` expose that under `@_spi(Testing)`:
+
+```swift
+@_spi(Testing) import SwiftAsyncStream
+
+for index in 0..<10 {
+    tasks.append(Task { await lock.withLockVoid { order.append(index) } })
+    try await lock.waitForPendingOperations(index + 1)
+}
+```
+
 ---
 
 ## Debugging
@@ -351,10 +466,10 @@ print(lock.debugDescription)
 
 ```
 AsyncLock
-holder: refreshSession() at NaturaSessionManager.swift:214
+holder: refreshSession() at SessionManager.swift:214
 pending (2):
-  - waiting (selectAddress(_:) at NaturaAddressManager.swift:88)
-  - waiting (refreshSession() at NaturaSessionManager.swift:214)
+  - waiting (selectAddress(_:) at AddressManager.swift:88)
+  - waiting (refreshSession() at SessionManager.swift:214)
 ```
 
 A repeat of the same call site in both the holder and the queue is reentrancy.
@@ -387,6 +502,7 @@ The report carries the full `debugDescription`. Opt-in, and disabled by default 
 | `expectations` throwing `CancellationError` on timeout | throws `AsyncExpectationTimeout` |
 | `node.stateDataSource` / `node.nextDataSource` | `node.snapshot` |
 | `AsyncOperation.State.finished` | `.running` |
+| `InlineProperty: Sendable` | conditional on `Value: Sendable` |
 
 Behavioural changes that do not break compilation:
 
@@ -400,6 +516,13 @@ Behavioural changes that do not break compilation:
 - **Inverted expectations fail fast** instead of costing the full timeout.
 - **Foundation is no longer imported.** If your code relied on receiving it transitively, import
   it explicitly.
+
+New in 2.0: `AsyncSemaphore`, `ReplaySubject`, `FIFOQueue`, buffering policies, the `AsyncLock`
+watchdog, and `debugDescription` on every primitive that can hold a task.
+
+`InlineProperty` gained `withValue(_:)`. Reads and writes were always individually safe, but they
+do not compose: `wrappedValue += 1` is a read, a modify and a write, so concurrent callers lose
+updates. Use `withValue { $0 += 1 }` whenever the new value depends on the old one.
 
 Expect the first run after upgrading to surface failures rather than hide them. Tests that passed
 in 1.x because a hang was swallowed will now report.
