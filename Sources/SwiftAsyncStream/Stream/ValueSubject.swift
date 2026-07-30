@@ -69,6 +69,15 @@ public struct ValueSubject<Element: Sendable>: Sendable {
     ///   behind. `.bufferingNewest(1)` turns the subject into a conflating one, where a slow
     ///   subscriber always jumps straight to the latest value.
     public init(_ element: Element, bufferingPolicy: SubjectBufferingPolicy = .unbounded) {
+        precondition(
+            bufferingPolicy != .untilFirstIteration,
+            """
+            ValueSubject cannot buffer until its first iteration: subscribers join at the \
+            latest element, so the head is never handed to anyone and the buffer would be held \
+            forever. Use ReplaySubject for that policy.
+            """
+        )
+
         storage = .init(element, policy: bufferingPolicy)
     }
 }

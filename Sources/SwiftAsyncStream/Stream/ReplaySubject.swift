@@ -23,7 +23,8 @@ public struct ReplaySubject<Element: Sendable>: Sendable {
     /// Creates a new ReplaySubject instance.
     /// - Parameter bufferingPolicy: How many published elements are kept and replayed.
     /// `.bufferingNewest(n)` replays the last `n`. `.unbounded` replays everything and never
-    /// releases it.
+    /// releases it. `.untilFirstIteration` replays everything to the first iterator and then
+    /// releases the buffer to it, which makes the subject single use.
     public init(bufferingPolicy: SubjectBufferingPolicy) {
         chain = .init(policy: bufferingPolicy)
     }
@@ -50,8 +51,12 @@ extension ReplaySubject: AsyncSequence {
 
     public typealias AsyncIterator = SubjectAsyncIterator<Element>
 
+    /// Creates an iterator that replays the buffer and then continues live.
+    ///
+    /// - Warning: Under `.untilFirstIteration` this is single use and traps on the second
+    /// call. Every other policy allows as many iterators as you like.
     public func makeAsyncIterator() -> AsyncIterator {
-        .init(chain.replayCursor)
+        .init(chain.makeReplayCursor())
     }
 }
 
@@ -61,7 +66,14 @@ extension ReplaySubject: AsyncSequence {
 public extension ReplaySubject {
 
     /// Elements currently held in the replay buffer.
+    ///
+    /// Zero under `.untilFirstIteration` once the buffer has been handed to a consumer.
     var bufferedCount: Int {
         chain.count
+    }
+
+    /// Whether the subject still holds a replayable buffer.
+    var holdsBuffer: Bool {
+        chain.holdsBuffer
     }
 }

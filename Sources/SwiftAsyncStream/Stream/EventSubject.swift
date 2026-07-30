@@ -16,6 +16,15 @@ public struct EventSubject<Element: Sendable>: Sendable {
     /// fall behind. Defaults to `.unbounded`, which lets a stalled subscriber pin every element
     /// published since it stalled.
     public init(bufferingPolicy: SubjectBufferingPolicy = .unbounded) {
+        precondition(
+            bufferingPolicy != .untilFirstIteration,
+            """
+            EventSubject cannot buffer until its first iteration: subscribers join at the tail, \
+            so the head is never handed to anyone and the buffer would be held forever. Use \
+            ReplaySubject for that policy.
+            """
+        )
+
         chain = .init(policy: bufferingPolicy)
     }
 

@@ -11,19 +11,19 @@
 ///
 /// Vacated slots are cleared rather than left behind, so a dequeued or removed element is
 /// released immediately instead of waiting for the next compaction.
-struct FIFOQueue<Element> {
+public struct FIFOQueue<Element> {
 
-    // MARK: - Internal properties
+    // MARK: - Public properties
 
     /// Elements currently in the queue.
-    private(set) var count = 0
+    public private(set) var count = 0
 
-    var isEmpty: Bool {
+    public var isEmpty: Bool {
         count == .zero
     }
 
     /// Every queued element, oldest first.
-    var elements: [Element] {
+    public var elements: [Element] {
         storage[head...].compactMap { $0 }
     }
 
@@ -39,18 +39,18 @@ struct FIFOQueue<Element> {
 
     // MARK: - Inits
 
-    init() {}
+    public init() {}
 
-    // MARK: - Internal methods
+    // MARK: - Public methods
 
     /// Adds an element to the back of the queue.
-    mutating func append(_ element: Element) {
+    public mutating func append(_ element: Element) {
         storage.append(element)
         count += 1
     }
 
     /// Removes and returns the oldest element.
-    mutating func popFirst() -> Element? {
+    public mutating func popFirst() -> Element? {
         while head < storage.count {
             let element = storage[head]
 
@@ -72,7 +72,7 @@ struct FIFOQueue<Element> {
     }
 
     /// Removes every element matching the predicate, keeping the order of the rest.
-    mutating func removeAll(where shouldRemove: (Element) -> Bool) {
+    public mutating func removeAll(where shouldRemove: (Element) -> Bool) {
         for index in head..<storage.count {
             guard let element = storage[index], shouldRemove(element) else {
                 continue
@@ -86,7 +86,7 @@ struct FIFOQueue<Element> {
     }
 
     /// Empties the queue and returns everything that was in it, oldest first.
-    mutating func drain() -> [Element] {
+    public mutating func drain() -> [Element] {
         let elements = self.elements
 
         storage.removeAll(keepingCapacity: true)

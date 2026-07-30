@@ -3,10 +3,9 @@
 
 /// Owns the chain of published elements and the window kept for consumers that fall behind.
 ///
-/// The chain retains its own window, from ``head`` to the latest produced cell. Consumers hold
-/// the cell they are parked on and nothing else, so trimming the window is what actually frees
-/// memory: a discarded cell survives only while a consumer is still standing on it, and that
-/// consumer is woken to move off immediately.
+/// The chain retains its own window, from ``_head`` to the latest produced cell. Consumers hold
+/// the cell they are parked on and nothing else, so what the chain holds is what decides the
+/// floor on memory: while it holds a head, nothing behind that head can ever be released.
 final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
     // MARK: - Internal properties
@@ -16,19 +15,22 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
         lock.withLock { _tail }
     }
 
-    /// Subscription point for a subject that replays everything still inside the window.
-    var replayCursor: NodeSubject<Element> {
-        lock.withLock { _head }
-    }
-
     /// Subscription point for a subject that replays its current element.
     var currentCursor: NodeSubject<Element> {
         lock.withLock { _latest ?? _tail }
     }
 
     /// Elements currently retained by the chain.
+    ///
+    /// Zero once the head has been handed over: from that point the chain holds no window, and
+    /// what stays alive is decided entirely by where the consumers are standing.
     var count: Int {
         lock.withLock { _count }
+    }
+
+    /// Whether the chain still holds a replayable window.
+    var holdsBuffer: Bool {
+        lock.withLock { _head != nil }
     }
 
     // MARK: - Private properties
@@ -38,7 +40,10 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
     // MARK: - Unsafe properties
 
-    private var _head: NodeSubject<Element>
+    // Optional because `.untilFirstIteration` gives it up. Everything behind the head is
+    // retained through it, so releasing it is what actually frees memory.
+    private var _head: NodeSubject<Element>?
+
     private var _latest: NodeSubject<Element>?
     private var _tail: NodeSubject<Element>
     private var _count = 0
@@ -69,6 +74,35 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
     // MARK: - Internal methods
 
+    /// Subscription point for a subject that replays everything still inside the window.
+    ///
+    /// Under ``SubjectBufferingPolicy/untilFirstIteration`` this hands the window over and the
+    /// chain stops holding it, which makes the call single use.
+    ///
+    /// - Warning: Traps when the window has already been handed over. Returning the tail
+    /// instead would give the second reader whatever happened to survive, a partial result
+    /// that changes with how far the first reader got.
+    func makeReplayCursor() -> NodeSubject<Element> {
+        lock.withLock { () -> NodeSubject<Element> in
+            guard let head = _head else {
+                preconditionFailure(
+                    """
+                    This subject buffers only until its first iteration and has already been \
+                    iterated. Create one subject per consumer, or use a policy that keeps the \
+                    buffer for every subscriber.
+                    """
+                )
+            }
+
+            if case .untilFirstIteration = policy {
+                _head = nil
+                _count = .zero
+            }
+
+            return head
+        }
+    }
+
     /// Appends an element and hands back the cells whose consumers have to be woken.
     ///
     /// - Important: Signal them only after releasing every lock the caller holds. Resuming a
@@ -85,9 +119,14 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
             _latest = _tail
             _tail = next
-            _count += 1
 
-            signals.append(contentsOf: _trim())
+            // Only counts what the chain itself is holding. Once the head is gone the chain
+            // retains no window, so there is nothing to count and nothing to trim.
+            if _head != nil {
+                _count += 1
+                signals.append(contentsOf: _trim())
+            }
+
             return signals
         }
     }
@@ -134,9 +173,9 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
         // `limit` is at least one, so the latest cell is never reachable here: dropping stops
         // while at least one produced cell remains.
-        while _count > limit, let next = _head.nextNode {
-            _head.drop()
-            dropped.append(_head)
+        while _count > limit, let head = _head, let next = head.nextNode {
+            head.drop()
+            dropped.append(head)
 
             _head = next
             _count -= 1
