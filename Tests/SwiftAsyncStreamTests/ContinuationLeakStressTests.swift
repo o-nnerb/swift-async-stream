@@ -41,7 +41,11 @@ struct ContinuationLeakStressTests {
 
     private static let waiters = 100
     private static let rounds = 20
-    private static let timeout: Double = 30
+
+    /// A bound on failure, not a performance budget. A healthy round never comes near it, so
+    /// making it generous costs a passing run nothing and keeps the suite honest under a
+    /// sanitizer, where everything is an order of magnitude slower.
+    private static let timeout: Double = 120
 
     /// Cancelling queued waiters must not lose any of them. `AsyncLock` is cancellation
     /// transparent, so every one of them still takes its turn and finishes.
@@ -76,6 +80,11 @@ struct ContinuationLeakStressTests {
             }
 
             #expect(await counter.count == Self.waiters)
+
+            // Catches the other shape of leak: a continuation that does resume while its
+            // operation stays queued forever. That one never hangs, it just leaves the
+            // primitive permanently convinced it is busy, so no timeout would notice.
+            #expect(lock.pendingCount == .zero)
         }
     }
 
@@ -115,6 +124,10 @@ struct ContinuationLeakStressTests {
             }
 
             #expect(await counter.count == Self.waiters)
+            #expect(semaphore.waitingCount == .zero)
+
+            // Every permit taken came back exactly once: none lost, none duplicated.
+            #expect(semaphore.availablePermits == permits)
         }
     }
 
@@ -159,6 +172,42 @@ struct ContinuationLeakStressTests {
             }
 
             #expect(await counter.count == Self.waiters)
+            #expect(signal.waitingCount == .zero)
+        }
+    }
+
+    /// Cancelling every waiter is a different path, not just a stricter version of the one
+    /// above: each cancellation removes itself from the queue, so the signal arrives to find
+    /// nothing left to release. A hundred removals in a row followed by an empty drain is
+    /// where an off by one in the queue would show.
+    @Test
+    func asyncSignalLosesNoWaiterWhenAllAreCancelled() async throws {
+        for _ in 0..<Self.rounds {
+            let signal = AsyncSignal()
+            let finished = AsyncSignal()
+            let counter = CompletionCounter(target: Self.waiters, finished: finished)
+
+            let tasks = (0..<Self.waiters).map { _ in
+                Task {
+                    _ = try? await signal.wait()
+                    await counter.increment()
+                }
+            }
+
+            try await signal.waitForWaiters(Self.waiters, timeout: Self.timeout)
+
+            for task in tasks {
+                task.cancel()
+            }
+
+            signal.signal()
+
+            try await withTaskTimeout(seconds: Self.timeout) {
+                try await finished.wait()
+            }
+
+            #expect(await counter.count == Self.waiters)
+            #expect(signal.waitingCount == .zero)
         }
     }
 
@@ -171,16 +220,22 @@ struct ContinuationLeakStressTests {
             let finished = AsyncSignal()
             let counter = CompletionCounter(target: Self.waiters, finished: finished)
 
-            let tasks = (0..<Self.waiters).map { _ in
+            // Attached here, synchronously, before a single task exists. `makeAsyncIterator()`
+            // is what fixes a subscriber's position in the chain, so creating them up front
+            // removes the gap between "a task was created" and "that task reached its loop".
+            // The previous version slept for fifty milliseconds and hoped, which under a
+            // sanitizer is not a safe bet, and a subject has no waiter count to poll instead.
+            let iterators = (0..<Self.waiters).map { _ in subject.makeAsyncIterator() }
+
+            let tasks = iterators.map { iterator in
                 Task {
-                    for await _ in subject {}
+                    var iterator = iterator
+
+                    while await iterator.next() != nil {}
+
                     await counter.increment()
                 }
             }
-
-            // No queue to poll on a subject, so the producer is what proves the subscribers
-            // arrived: a value only reaches them once they are attached.
-            try await Task.sleep(nanoseconds: 50_000_000)
 
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
