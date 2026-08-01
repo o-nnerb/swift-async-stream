@@ -262,6 +262,10 @@ struct ContinuationLeakStressTests {
 /// What matters is not that it is prompt, but that being late never makes it wrong.
 struct AsyncLockWatchdogTests {
 
+    /// A bound on failure, not a performance budget, same as in the stress suite above. A
+    /// healthy run never comes near it.
+    private static let timeout: Double = 300
+
     /// A watchdog that wakes long after its section ended must stay quiet, including when a
     /// different acquisition holds the lock by then. That second case is why the check is
     /// against the holding operation's identity and not against "is the lock held".
