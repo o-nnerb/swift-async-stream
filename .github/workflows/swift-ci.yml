@@ -268,29 +268,52 @@ jobs:
       - name: 🕸️ Install WebAssembly SDK
         id: install-sdk
         run: |
+          set -ex
+
           SWIFT_VERSION="6.2"
           SDK_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_wasm.artifactbundle.tar.gz"
           SDK_FILENAME="swift-${SWIFT_VERSION}-RELEASE_wasm.artifactbundle.tar.gz"
 
           echo "Downloading SDK from: $SDK_URL"
-          curl -L "$SDK_URL" -o "$SDK_FILENAME"
+          curl -fL "$SDK_URL" -o "$SDK_FILENAME"
+
+          echo "File size:"
+          ls -lh "$SDK_FILENAME"
 
           echo "Computing checksum..."
           CHECKSUM=$(swift package compute-checksum "$SDK_FILENAME")
           echo "Checksum: $CHECKSUM"
 
           echo "Installing SDK..."
-          swift sdk install "$SDK_URL" --checksum "$CHECKSUM"
+          swift sdk install "$SDK_FILENAME" --checksum "$CHECKSUM"
 
-          rm "$SDK_FILENAME"
-
-          echo "Installed SDKs:"
+          echo "Full list of installed SDKs:"
           swift sdk list
 
-          # Captura o ID do primeiro SDK instalado
-          SDK_ID=$(swift sdk list | grep -E "^[0-9]+\." | head -n 1 | awk '{print $1}')
+          # Lista em formato JSON para parsing confiável
+          echo "JSON output:"
+          swift sdk list --json > sdks.json || true
+          cat sdks.json
+
+          # Extrai o ID do SDK que tem 'wasm' no target triple
+          SDK_ID=$(swift sdk list --json | jq -r '.[] | select(.targetTriple | contains("wasm")) | .id' | head -n 1)
+
+          # Fallback: se --json falhou, tenta parsing de texto
+          if [ -z "$SDK_ID" ] || [ "$SDK_ID" = "null" ]; then
+            echo "JSON parsing failed, trying text parsing..."
+            SDK_ID=$(swift sdk list | grep -i wasm | awk '{print $1}' | head -n 1)
+          fi
+
+          if [ -z "$SDK_ID" ]; then
+            echo "❌ ERROR: Could not determine SDK ID"
+            swift sdk list
+            exit 1
+          fi
+
+          echo "✅ SDK_ID=$SDK_ID"
           echo "SDK_ID=$SDK_ID" >> $GITHUB_OUTPUT
-          echo "Using SDK ID: $SDK_ID"
+
+          rm "$SDK_FILENAME"
 
       - name: 🕸️ Build for WebAssembly
         run: swift build --swift-sdk ${{ steps.install-sdk.outputs.SDK_ID }}
@@ -304,14 +327,24 @@ jobs:
       - name: 🧪 Run WebAssembly Tests
         run: |
           PACKAGE_NAME="SwiftAsyncStream"
-          TEST_BUNDLE=".build/${{ steps.install-sdk.outputs.SDK_ID }}/debug/${PACKAGE_NAME}PackageTests.wasm"
-          if [ -f "$TEST_BUNDLE" ]; then
-            wasmtime --dir . "$TEST_BUNDLE"
-          else
-            echo "Test bundle not found at $TEST_BUNDLE"
-            ls -la .build/ || true
+          SDK_ID="${{ steps.install-sdk.outputs.SDK_ID }}"
+
+          echo "Looking for test bundle with SDK ID: $SDK_ID"
+          echo "Contents of .build:"
+          ls -la .build/ || true
+
+          # Tenta localizar o .wasm de diferentes maneiras
+          TEST_BUNDLE=$(find .build -name "*PackageTests.wasm" -type f 2>/dev/null | head -n 1)
+
+          if [ -z "$TEST_BUNDLE" ]; then
+            echo "❌ Test bundle not found"
+            find .build -type d -name "*wasm*" 2>/dev/null || true
+            find .build -name "*.wasm" 2>/dev/null || true
             exit 1
           fi
+
+          echo "✅ Found test bundle: $TEST_BUNDLE"
+          wasmtime --dir . "$TEST_BUNDLE"
 
   # ═══════════════════════════════════════════════════════════════
   # ETAPA 4: Coverage Upload (só após todos os tests passarem)
