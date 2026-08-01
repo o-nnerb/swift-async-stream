@@ -165,6 +165,7 @@ struct AsyncSemaphoreTests {
 
     // MARK: - Debugging
 
+    @available(iOS 16, tvOS 16, watchOS 9, macOS 13, *)
     @Test
     func debugDescriptionReportsAvailableAndWaitingCounts() async throws {
         let semaphore = AsyncSemaphore(permits: 2)
