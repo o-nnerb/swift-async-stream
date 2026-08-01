@@ -45,7 +45,7 @@ struct ContinuationLeakStressTests {
     /// A bound on failure, not a performance budget. A healthy round never comes near it, so
     /// making it generous costs a passing run nothing and keeps the suite honest under a
     /// sanitizer, where everything is an order of magnitude slower.
-    private static let timeout: Double = 120
+    private static let timeout: Double = 300
 
     /// Cancelling queued waiters must not lose any of them. `AsyncLock` is cancellation
     /// transparent, so every one of them still takes its turn and finishes.
@@ -313,9 +313,9 @@ struct AsyncLockWatchdogTests {
             }
         }
 
-        try await lock.waitForPendingOperations(20, timeout: 30)
+        try await lock.waitForPendingOperations(20, timeout: Self.timeout)
 
-        try await withTaskTimeout(seconds: 30) {
+        try await withTaskTimeout(seconds: Self.timeout) {
             try await reported.wait()
         }
 

@@ -7,9 +7,21 @@ import Testing
 
 struct TaskTimeoutTests {
 
+    /// A deadline in a test is one of two things, and never anything in between.
+    ///
+    /// Either it is the thing under test, in which case the body has to be **incapable** of
+    /// finishing, so the deadline is the only possible outcome. Or it is incidental, in which
+    /// case it has to be far out of the executor's reach, so scheduling can never beat it.
+    ///
+    /// Anything in the middle is a race against the scheduler. A one second deadline over a
+    /// body that throws instantly reads as an enormous margin, and a watchOS simulator running
+    /// twenty times slow spent twenty four seconds before the body was ever scheduled: the
+    /// deadline fired, correctly, and the test failed for it.
+    private static let unreachableDeadline: Double = 300
+
     @Test
     func returnsTheValueWhenTheOperationFinishesInTime() async throws {
-        let value = try await withTaskTimeout(seconds: 1) {
+        let value = try await withTaskTimeout(seconds: Self.unreachableDeadline) {
             42
         }
 
@@ -38,7 +50,7 @@ struct TaskTimeoutTests {
         struct TestError: Error {}
 
         await #expect(throws: TestError.self) {
-            try await withTaskTimeout(seconds: 1) {
+            try await withTaskTimeout(seconds: Self.unreachableDeadline) {
                 throw TestError()
             }
         }
@@ -53,7 +65,7 @@ struct TaskTimeoutTests {
         let cancelled = InlineProperty(wrappedValue: false)
 
         let task = Task {
-            try await withTaskTimeout(seconds: 30) {
+            try await withTaskTimeout(seconds: Self.unreachableDeadline) {
                 started.signal()
 
                 do {
@@ -96,7 +108,7 @@ struct TaskTimeoutTests {
         // Waited for rather than asserted straight away. `withTaskTimeout` returns as soon as
         // the deadline wins, and the losing child is cancelled and drained on the way out of
         // the group, which is ordered after that but not instantaneous.
-        try await withTaskTimeout(seconds: 10) {
+        try await withTaskTimeout(seconds: Self.unreachableDeadline) {
             try await cancelled.wait()
         }
     }

@@ -48,7 +48,7 @@ struct AsyncSignalTests {
 
         // Waits for the task to actually be queued, rather than sleeping and assuming it got
         // there. Nothing can have completed while a waiter is still pending.
-        try await signal.waitForWaiters(1, timeout: 10)
+        try await signal.waitForWaiters(1, timeout: 300)
         #expect(!completed.wrappedValue)
 
         signal.signal()
@@ -71,7 +71,7 @@ struct AsyncSignalTests {
             completed.wrappedValue = true
         }
 
-        try await signal.waitForWaiters(1, timeout: 10)
+        try await signal.waitForWaiters(1, timeout: 300)
         #expect(!completed.wrappedValue)
 
         signal.signal()
@@ -91,7 +91,7 @@ struct AsyncSignalTests {
             try await signal.wait()
         }
 
-        try await signal.waitForWaiters(1, timeout: 10)
+        try await signal.waitForWaiters(1, timeout: 300)
         task.cancel()
 
         await #expect(throws: CancellationError.self) {
@@ -133,14 +133,14 @@ struct AsyncSignalTests {
                 try await signal.wait()
             }
 
-            try await signal.waitForWaiters(1, timeout: 10)
+            try await signal.waitForWaiters(1, timeout: 300)
 
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { task.cancel() }
                 group.addTask { signal.signal() }
             }
 
-            try await withTaskTimeout(seconds: 10) {
+            try await withTaskTimeout(seconds: 300) {
                 _ = try? await task.value
             }
         }
