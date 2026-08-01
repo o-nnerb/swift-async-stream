@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 /// A small deterministic generator, seeded so the stress test below reproduces the same

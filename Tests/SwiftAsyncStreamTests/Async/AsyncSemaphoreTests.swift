@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @_spi(Testing) @testable import SwiftAsyncStream
 
 /// Tracks how many tasks are inside a section at the same time.
@@ -38,7 +39,7 @@ struct AsyncSemaphoreTests {
                 group.addTask {
                     await semaphore.withPermitVoid {
                         await probe.begin()
-                        try? await Task.sleep(nanoseconds: 5_000_000) // 5ms
+                        try? await Task.sleep(nanoseconds: 5_000_000)  // 5ms
                         await probe.end()
                     }
                 }
@@ -132,7 +133,7 @@ struct AsyncSemaphoreTests {
         try await semaphore.waitForWaiters(1)
         task.cancel()
 
-        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try await Task.sleep(nanoseconds: 100_000_000)  // 100ms
         #expect(!acquired.wrappedValue)
 
         semaphore.signal()

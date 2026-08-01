@@ -63,7 +63,7 @@ extension ReplaySubject: AsyncSequence {
 
 // MARK: - Single use reporting
 
-public extension ReplaySubject {
+extension ReplaySubject {
 
     /// Creates an iterator, reporting unavailability instead of trapping.
     ///
@@ -73,7 +73,7 @@ public extension ReplaySubject {
     ///
     /// - Returns: An iterator, or `nil` under `.untilFirstIteration` when the buffer has
     /// already been handed to a consumer. Never `nil` under any other policy.
-    func makeIteratorIfAvailable() -> AsyncIterator? {
+    public func makeIteratorIfAvailable() -> AsyncIterator? {
         chain.makeReplayCursorIfAvailable().map(AsyncIterator.init)
     }
 }
@@ -81,18 +81,17 @@ public extension ReplaySubject {
 // MARK: - Testing
 
 @_spi(Testing)
-public extension ReplaySubject {
+extension ReplaySubject {
 
     /// Elements currently held in the replay buffer.
     ///
     /// Zero under `.untilFirstIteration` once the buffer has been handed to a consumer.
-    var bufferedCount: Int {
+    public var bufferedCount: Int {
         chain.count
     }
 
     /// Whether the subject still holds a replayable buffer.
-    var holdsBuffer: Bool {
+    public var holdsBuffer: Bool {
         chain.holdsBuffer
     }
 }
- 

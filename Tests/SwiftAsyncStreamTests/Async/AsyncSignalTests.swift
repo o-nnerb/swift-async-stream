@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 struct AsyncSignalTests {
@@ -15,7 +16,7 @@ struct AsyncSignalTests {
         }
 
         // Allow time for wait to start
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
 
         signal.signal()
 
@@ -46,12 +47,12 @@ struct AsyncSignalTests {
         }
 
         // Wait a bit to ensure the task has started waiting
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        #expect(!completed.wrappedValue) // Should not be completed yet
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+        #expect(!completed.wrappedValue)  // Should not be completed yet
 
         signal.signal()
         try await task.value
-        #expect(completed.wrappedValue) // Should now be completed
+        #expect(completed.wrappedValue)  // Should now be completed
     }
 
     @Test
@@ -69,7 +70,7 @@ struct AsyncSignalTests {
             completed.wrappedValue = true
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
         #expect(!completed.wrappedValue)
 
         signal.signal()
@@ -89,7 +90,7 @@ struct AsyncSignalTests {
             try await signal.wait()
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
         task.cancel()
 
         await #expect(throws: CancellationError.self) {

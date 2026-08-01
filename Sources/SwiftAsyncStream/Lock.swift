@@ -32,7 +32,9 @@ import WinSDK
 import wasi_pthread
 #endif
 #else
-#error("The Lock module was unable to identify your C library. Supported libraries are Glibc, Musl, Bionic, WASILibc, Darwin, and Windows SDK.")
+#error(
+    "The Lock module was unable to identify your C library. Supported libraries are Glibc, Musl, Bionic, WASILibc, Darwin, and Windows SDK."
+)
 #endif
 
 /// A thread-safe lock that provides mutual exclusion using platform-specific locking mechanisms.
@@ -87,8 +89,8 @@ public struct Lock: Sendable {
 
 // MARK: - Storage Implementation
 
-private extension Lock {
-    final class Storage: @unchecked Sendable {
+extension Lock {
+    fileprivate final class Storage: @unchecked Sendable {
         #if os(Windows)
         private let mutex: UnsafeMutablePointer<SRWLOCK> =
             UnsafeMutablePointer.allocate(capacity: 1)
@@ -264,5 +266,10 @@ extension Lock: CustomDebugStringConvertible {
 /// This is currently the only way to do this in Swift without compiler warnings.
 /// See: https://forums.swift.org/t/support-debug-only-code/11037
 private func debugOnly(_ body: () -> Void) {
-    assert({ body(); return true }())
+    assert(
+        {
+            body()
+            return true
+        }()
+    )
 }

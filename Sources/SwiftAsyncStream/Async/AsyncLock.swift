@@ -240,10 +240,10 @@ extension AsyncLock: CustomDebugStringConvertible {
 // MARK: - Testing
 
 @_spi(Testing)
-public extension AsyncLock {
+extension AsyncLock {
 
     /// Operations waiting for the lock. The holder is not counted.
-    var pendingCount: Int {
+    public var pendingCount: Int {
         lock.withLock { _storage.pendingOperations.count }
     }
 
@@ -252,7 +252,7 @@ public extension AsyncLock {
     /// Creating a `Task` does not decide when it reaches the lock, so a test that needs a
     /// known queue order has to admit one waiter at a time and confirm its arrival, rather
     /// than creating them all at once and assuming creation order is arrival order.
-    func waitForPendingOperations(_ count: Int, timeout: Double = 2) async throws {
+    public func waitForPendingOperations(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { pendingCount }
     }
 }

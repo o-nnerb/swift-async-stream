@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 struct TaskTimeoutTests {
@@ -19,7 +20,7 @@ struct TaskTimeoutTests {
     func throwsATaskTimeoutErrorWhenTheDeadlinePasses() async throws {
         await #expect(throws: TaskTimeoutError.self) {
             try await withTaskTimeout(seconds: 0.05) {
-                try await Task.sleep(nanoseconds: 1_000_000_000) // 1s, past the deadline
+                try await Task.sleep(nanoseconds: 1_000_000_000)  // 1s, past the deadline
             }
         }
     }
@@ -46,7 +47,7 @@ struct TaskTimeoutTests {
             try await withTaskTimeout(seconds: 5) {
                 started.signal()
                 do {
-                    try await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                    try await Task.sleep(nanoseconds: 2_000_000_000)  // 2s
                 } catch {
                     cancelled.wrappedValue = true
                     throw error
@@ -73,7 +74,7 @@ struct TaskTimeoutTests {
         await #expect(throws: TaskTimeoutError.self) {
             try await withTaskTimeout(seconds: 0.05) {
                 do {
-                    try await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                    try await Task.sleep(nanoseconds: 2_000_000_000)  // 2s
                 } catch {
                     cancelled.wrappedValue = true
                     throw error

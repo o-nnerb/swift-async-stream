@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 struct LockTests {

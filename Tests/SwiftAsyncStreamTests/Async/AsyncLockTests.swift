@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @_spi(Testing) @testable import SwiftAsyncStream
 
 struct AsyncLockTests {
@@ -66,7 +67,7 @@ struct AsyncLockTests {
                     await asyncLock.withLock {
                         let taskId = i
                         sharedResource.wrappedValue = taskId
-                        try? await Task.sleep(nanoseconds: 100_000) // 100ms
+                        try? await Task.sleep(nanoseconds: 100_000)  // 100ms
                         #expect(sharedResource.wrappedValue == taskId)
                         accessOrder.wrappedValue.append(taskId)
                     }
@@ -85,7 +86,7 @@ struct AsyncLockTests {
         let counter = InlineProperty(wrappedValue: 0)
 
         await withTaskGroup(of: Void.self) { group in
-            for _ in 0 ..< iterations {
+            for _ in 0..<iterations {
                 group.addTask {
                     await asyncLock.withLock {
                         lock.withLock {
@@ -157,7 +158,7 @@ struct AsyncLockTests {
         task.cancel()
 
         // Cancelling a queued waiter does not remove it from the queue.
-        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try await Task.sleep(nanoseconds: 100_000_000)  // 100ms
         #expect(!acquired.wrappedValue)
 
         lock.unlock()
@@ -240,7 +241,7 @@ struct AsyncLockTests {
             }
         }
 
-        try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+        try await Task.sleep(nanoseconds: 200_000_000)  // 200ms
 
         #expect(counter.wrappedValue == 1)
         #expect(asyncLock.debugDescription.contains("pending (1)"))
@@ -259,7 +260,7 @@ struct AsyncLockTests {
         let lock = AsyncLock(watchdog: .init(seconds: 0.1) { report.wrappedValue = $0 })
 
         await lock.withLockVoid {
-            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms, past the deadline
+            try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms, past the deadline
         }
 
         #expect(report.wrappedValue?.contains("AsyncLock held for more than") == true)
@@ -271,10 +272,10 @@ struct AsyncLockTests {
         let lock = AsyncLock(watchdog: .init(seconds: 1) { report.wrappedValue = $0 })
 
         await lock.withLockVoid {
-            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
         }
 
-        try await Task.sleep(nanoseconds: 50_000_000) // give a late report a chance to land
+        try await Task.sleep(nanoseconds: 50_000_000)  // give a late report a chance to land
         #expect(report.wrappedValue == nil)
     }
 }

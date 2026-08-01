@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 /// A plain array backed sequence, used to validate `AnyAsyncSequence` against a source other

@@ -42,4 +42,3 @@ public enum SubjectBufferingPolicy: Sendable, Equatable {
     /// discarding elements that the whole point of the mode is to preserve.
     case untilFirstIteration
 }
- 

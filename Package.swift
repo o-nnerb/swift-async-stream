@@ -9,7 +9,7 @@ let package = Package(
         .macOS(.v12),
         .iOS(.v15),
         .tvOS(.v15),
-        .watchOS(.v8)
+        .watchOS(.v8),
     ],
     products: [
         .library(
@@ -36,7 +36,7 @@ let package = Package(
         .testTarget(
             name: "SwiftAsyncTestingTests",
             dependencies: ["SwiftAsyncTesting"]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

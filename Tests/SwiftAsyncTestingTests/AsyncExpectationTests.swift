@@ -1,8 +1,8 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
-import Testing
 import SwiftAsyncTesting
+import Testing
 
 struct AsyncExpectationTests {
 

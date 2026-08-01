@@ -173,13 +173,13 @@ extension AsyncSemaphore: CustomDebugStringConvertible {
 // MARK: - Testing
 
 @_spi(Testing)
-public extension AsyncSemaphore {
+extension AsyncSemaphore {
 
     /// Suspends until ``waitingCount`` settles on `count`.
     ///
     /// Same reason as ``AsyncLock/waitForPendingOperations(_:timeout:)``: task creation order
     /// is not task arrival order.
-    func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
+    public func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { waitingCount }
     }
 }

@@ -1,5 +1,6 @@
 @_exported import SwiftAsyncStream
 import Testing
+
 #if canImport(Darwin)
 import XCTest
 #endif
@@ -34,13 +35,13 @@ public struct AsyncExpectation: Sendable {
         }
 
         var assertForOverFulfill: Bool {
-            get { lock.withLock { _assertForOverFulfill }}
-            set { lock.withLock { _assertForOverFulfill = newValue }}
+            get { lock.withLock { _assertForOverFulfill } }
+            set { lock.withLock { _assertForOverFulfill = newValue } }
         }
 
         var isInverted: Bool {
-            get { lock.withLock { _isInverted }}
-            set { lock.withLock { _isInverted = newValue }}
+            get { lock.withLock { _isInverted } }
+            set { lock.withLock { _isInverted = newValue } }
         }
 
         private let lock = Lock()

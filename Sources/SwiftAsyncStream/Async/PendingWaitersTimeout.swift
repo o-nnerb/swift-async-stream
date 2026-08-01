@@ -54,7 +54,7 @@ func waitForCount(
             return
         }
 
-        try await Task.sleep(nanoseconds: 1_000_000) // 1ms
+        try await Task.sleep(nanoseconds: 1_000_000)  // 1ms
     }
 
     throw PendingWaitersTimeout(expected: count, found: value())

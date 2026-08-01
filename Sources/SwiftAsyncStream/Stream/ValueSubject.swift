@@ -26,7 +26,9 @@ public struct ValueSubject<Element: Sendable>: Sendable {
                     return chain.produce(newValue)
                 }
 
-                signals.forEach { $0.producer.signal() }
+                for node in signals {
+                    node.producer.signal()
+                }
             }
         }
 

@@ -159,7 +159,9 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
     /// - Warning: Never call while holding a lock. Use ``produce(_:)`` instead and signal after
     /// releasing it.
     func send(_ element: Element) {
-        produce(element).forEach { $0.producer.signal() }
+        for node in produce(element) {
+            node.producer.signal()
+        }
     }
 
     /// Ends the chain and wakes its consumers.

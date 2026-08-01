@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 struct ValueSubjectTests {
@@ -51,7 +52,7 @@ struct ValueSubjectTests {
         }
 
         // Allow time for subscription to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.value = 2
         subject.value = 3
@@ -85,7 +86,7 @@ struct ValueSubjectTests {
         }
 
         // Allow time for subscriptions to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.value = 1
         subject.value = 2
@@ -125,11 +126,11 @@ struct ValueSubjectTests {
 
         let task = Task {
             for await _ in subject {
-                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
             }
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
         task.cancel()
 
         try await withTaskTimeout(seconds: 1) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @testable import SwiftAsyncStream
 
 struct EventSubjectTests {
@@ -21,7 +22,7 @@ struct EventSubjectTests {
         }
 
         // Allow time for subscription to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send(10)
         subject.send(20)
@@ -33,19 +34,19 @@ struct EventSubjectTests {
     @Test
     func doesNotSendInitialValueToNewSubscribers() async {
         let subject = EventSubject<Int>()
-        subject.send(100) // Send before subscription
+        subject.send(100)  // Send before subscription
 
         let task = Task {
             var firstValue: Int?
             for await value in subject {
                 firstValue = value
-                break // Exit after first value
+                break  // Exit after first value
             }
             return firstValue
         }
 
         // Allow time for subscription to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send(200)
 
@@ -78,7 +79,7 @@ struct EventSubjectTests {
         }
 
         // Allow time for subscriptions to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send("Hello")
         subject.send("World")
@@ -102,11 +103,11 @@ struct EventSubjectTests {
         }
 
         // Allow time for subscription to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send(1)
         subject.completed()
-        subject.send(2) // This should not be received after completion
+        subject.send(2)  // This should not be received after completion
 
         await task.value
         #expect(receivedValues.wrappedValue == [1])
@@ -127,7 +128,7 @@ struct EventSubjectTests {
         }
 
         // Allow time for subscription to start
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send(42)
 
@@ -164,7 +165,7 @@ struct EventSubjectTests {
             }
         }
 
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
 
         subject.send(1)
         subject.send(2)
@@ -190,7 +191,7 @@ struct EventSubjectTests {
             }
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
         task.cancel()
 
         try await withTaskTimeout(seconds: 1) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @_spi(Testing) @testable import SwiftAsyncStream
 
 struct ReplaySubjectTests {
@@ -325,7 +326,7 @@ struct ReplaySubjectTests {
             }
         }
 
-        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
         task.cancel()
 
         try await withTaskTimeout(seconds: 1) {

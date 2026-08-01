@@ -17,10 +17,10 @@ public protocol CoalescingJob: Equatable, Sendable {
     var isCoalescable: Bool { get }
 }
 
-public extension CoalescingJob {
+extension CoalescingJob {
 
     /// A default implementation that allows equal adjacent jobs to share an execution.
-    var isCoalescable: Bool { true }
+    public var isCoalescable: Bool { true }
 }
 
 // MARK: - SerialCoalescingQueue
@@ -85,7 +85,8 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
             "\($0.job) (\($0.waiters.count) waiters)"
         }
 
-        let pending = batches
+        let pending =
+            batches
             .map { "  - \($0.job) (\($0.waiters.count) waiters)" }
             .joined(separator: "\n")
 
@@ -148,15 +149,15 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
 // MARK: - Testing
 
 @_spi(Testing)
-public extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
     /// Batches waiting to be dispatched.
-    var pendingBatchCount: Int {
+    public var pendingBatchCount: Int {
         batches.count
     }
 
     /// Callers waiting across every pending batch.
-    var pendingWaiterCount: Int {
+    public var pendingWaiterCount: Int {
         batches.reduce(.zero) { $0 + $1.waiters.count }
     }
 
@@ -164,7 +165,7 @@ public extension SerialCoalescingQueue {
     ///
     /// Not part of `pendingBatchCount` or `pendingWaiterCount`: a dispatched batch has left
     /// the queue.
-    var runningJob: Job? {
+    public var runningJob: Job? {
         runningBatch?.job
     }
 
@@ -172,7 +173,7 @@ public extension SerialCoalescingQueue {
     ///
     /// Creating a `Task` does not decide when it reaches the actor, so a test that
     /// needs a known queue shape has to wait for it instead of assuming it.
-    func waitForPendingWaiters(
+    public func waitForPendingWaiters(
         _ count: Int,
         timeout: Double = 2
     ) async throws {
@@ -182,9 +183,9 @@ public extension SerialCoalescingQueue {
 
 // MARK: - Enqueueing
 
-private extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
-    func enqueue(
+    fileprivate func enqueue(
         id: Int,
         job: Job,
         operation: @escaping Operation
@@ -217,7 +218,7 @@ private extension SerialCoalescingQueue {
     ///
     /// When the last caller of a batch cancels, the batch is dropped and never
     /// runs.
-    func cancel(_ id: Int) {
+    fileprivate func cancel(_ id: Int) {
         for index in batches.indices {
             guard let waiterIndex = batches[index].waiters.firstIndex(where: { $0.id == id }) else {
                 continue
@@ -236,9 +237,9 @@ private extension SerialCoalescingQueue {
 
 // MARK: - Draining
 
-private extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
-    func startIfNeeded() {
+    fileprivate func startIfNeeded() {
         guard !isRunning, !batches.isEmpty else {
             return
         }
@@ -248,7 +249,7 @@ private extension SerialCoalescingQueue {
         drainTask = Task { await self.drain() }
     }
 
-    func drain() async {
+    fileprivate func drain() async {
         defer {
             isRunning = false
             runningBatch = nil
@@ -270,7 +271,9 @@ private extension SerialCoalescingQueue {
             }
 
             runningBatch = nil
-            batch.waiters.forEach { $0.continuation.resume(returning: result) }
+            for waiter in batch.waiters {
+                waiter.continuation.resume(returning: result)
+            }
         }
     }
 }
