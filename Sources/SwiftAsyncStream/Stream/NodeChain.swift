@@ -79,19 +79,13 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
     /// Under ``SubjectBufferingPolicy/untilFirstIteration`` this hands the window over and the
     /// chain stops holding it, which makes the call single use.
     ///
-    /// - Warning: Traps when the window has already been handed over. Returning the tail
-    /// instead would give the second reader whatever happened to survive, a partial result
-    /// that changes with how far the first reader got.
-    func makeReplayCursor() -> NodeSubject<Element> {
-        lock.withLock { () -> NodeSubject<Element> in
+    /// - Returns: The oldest retained cell, or `nil` when the window has already been handed
+    /// over. Never the tail: giving a second reader whatever happened to survive would be a
+    /// partial result that changes with how far the first reader got.
+    func makeReplayCursorIfAvailable() -> NodeSubject<Element>? {
+        lock.withLock { () -> NodeSubject<Element>? in
             guard let head = _head else {
-                preconditionFailure(
-                    """
-                    This subject buffers only until its first iteration and has already been \
-                    iterated. Create one subject per consumer, or use a policy that keeps the \
-                    buffer for every subscriber.
-                    """
-                )
+                return nil
             }
 
             if case .untilFirstIteration = policy {
@@ -101,6 +95,22 @@ final class NodeChain<Element: Sendable>: @unchecked Sendable {
 
             return head
         }
+    }
+
+    /// Same as ``makeReplayCursorIfAvailable()``, for callers with no way to report the misuse.
+    /// - Warning: Traps when the window has already been handed over.
+    func makeReplayCursor() -> NodeSubject<Element> {
+        guard let cursor = makeReplayCursorIfAvailable() else {
+            preconditionFailure(
+                """
+                This subject buffers only until its first iteration and has already been \
+                iterated. Create one subject per consumer, or use a policy that keeps the \
+                buffer for every subscriber.
+                """
+            )
+        }
+
+        return cursor
     }
 
     /// Appends an element and hands back the cells whose consumers have to be woken.

@@ -54,9 +54,27 @@ extension ReplaySubject: AsyncSequence {
     /// Creates an iterator that replays the buffer and then continues live.
     ///
     /// - Warning: Under `.untilFirstIteration` this is single use and traps on the second
-    /// call. Every other policy allows as many iterators as you like.
+    /// call. Every other policy allows as many iterators as you like. Wrappers that can
+    /// report the misuse should use ``ReplaySubject/makeIteratorIfAvailable()`` instead.
     public func makeAsyncIterator() -> AsyncIterator {
         .init(chain.makeReplayCursor())
+    }
+}
+
+// MARK: - Single use reporting
+
+public extension ReplaySubject {
+
+    /// Creates an iterator, reporting unavailability instead of trapping.
+    ///
+    /// `makeAsyncIterator()` cannot throw, so a subject that is out of buffer has no way to
+    /// explain itself through the `AsyncSequence` conformance. A wrapper whose own iterator is
+    /// throwing can use this to turn the misuse into an error its callers can catch.
+    ///
+    /// - Returns: An iterator, or `nil` under `.untilFirstIteration` when the buffer has
+    /// already been handed to a consumer. Never `nil` under any other policy.
+    func makeIteratorIfAvailable() -> AsyncIterator? {
+        chain.makeReplayCursorIfAvailable().map(AsyncIterator.init)
     }
 }
 
@@ -77,3 +95,4 @@ public extension ReplaySubject {
         chain.holdsBuffer
     }
 }
+ 

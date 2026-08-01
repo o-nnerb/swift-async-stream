@@ -205,7 +205,51 @@ struct ReplaySubjectTests {
 
     // A second `makeAsyncIterator()` under `.untilFirstIteration` traps by design. There is no
     // test for it: Swift Testing cannot assert a `preconditionFailure` without bringing the
-    // whole process down. The behaviour is documented on the policy and on the method.
+    // whole process down. Wrappers that need to report the misuse instead use
+    // `makeIteratorIfAvailable()`, which is covered below.
+
+    // MARK: - Single use reporting
+
+    @Test
+    func makeIteratorIfAvailableReportsTheHandover() {
+        let subject = ReplaySubject<Int>(bufferingPolicy: .untilFirstIteration)
+
+        subject.send(1)
+
+        #expect(subject.makeIteratorIfAvailable() != nil)
+        #expect(subject.makeIteratorIfAvailable() == nil)
+    }
+
+    @Test
+    func theFirstIteratorFromMakeIteratorIfAvailableStillReplaysEverything() async {
+        let subject = ReplaySubject<Int>(bufferingPolicy: .untilFirstIteration)
+
+        subject.send(1)
+        subject.send(2)
+
+        guard var iterator = subject.makeIteratorIfAvailable() else {
+            Issue.record("Expected the buffer to still be available")
+            return
+        }
+
+        #expect(await iterator.next() == 1)
+        #expect(await iterator.next() == 2)
+    }
+
+    /// Only `.untilFirstIteration` can ever run out. Every other policy keeps handing out
+    /// iterators, so the optional variant behaves exactly like the plain one.
+    @Test
+    func makeIteratorIfAvailableNeverReportsAHandoverUnderOtherPolicies() {
+        for policy in [SubjectBufferingPolicy.unbounded, .bufferingNewest(2)] {
+            let subject = ReplaySubject<Int>(bufferingPolicy: policy)
+
+            subject.send(1)
+
+            #expect(subject.makeIteratorIfAvailable() != nil)
+            #expect(subject.makeIteratorIfAvailable() != nil)
+            #expect(subject.makeIteratorIfAvailable() != nil)
+        }
+    }
 
     // MARK: - Completion
 
