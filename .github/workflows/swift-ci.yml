@@ -260,10 +260,13 @@ jobs:
         with:
           swift-version: '6.2'
 
-      - name: 🕸️ Setup SwiftWasm SDK
-        uses: swiftwasm/setup-swiftwasm@v2.1
-        with:
-          tag: "swift-6.2-RELEASE"
+      - name: 🕸️ Install WebAssembly SDK
+        run: |
+          # Instala o SDK oficial do swift.org para Swift 6.2
+          swift sdk install https://download.swift.org/swift-6.2-release/wasm32-unknown-wasi/swift-6.2-RELEASE/swift-6.2-RELEASE_wasm32-unknown-wasi.artifactbundle.zip
+
+          # Lista os SDKs instalados para verificar
+          swift sdk list
 
       - name: 🕸️ Build for WebAssembly
         run: swift build --swift-sdk wasm32-unknown-wasi
