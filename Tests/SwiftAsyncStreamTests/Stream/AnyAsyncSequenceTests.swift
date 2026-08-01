@@ -42,7 +42,7 @@ private struct ThrowingSequence: AsyncSequence, Sendable {
     struct AsyncIterator: AsyncIteratorProtocol, Sendable {
 
         mutating func next() async throws(Failure) -> Int? {
-            if #available(iOS 18.0, *) {
+            if #available(iOS 18, tvOS 18, watchOS 11, macOS 15, visionOS 2, *) {
                 throw Failure()
             } else {
                 return nil
