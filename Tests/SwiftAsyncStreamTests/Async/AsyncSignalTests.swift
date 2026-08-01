@@ -3,21 +3,21 @@
 
 import Testing
 
-@testable import SwiftAsyncStream
+@_spi(Testing) @testable import SwiftAsyncStream
 
 struct AsyncSignalTests {
 
     @Test
     func basicSignal() async throws {
         let signal = AsyncSignal()
+        let waiting = AsyncSignal()
 
         let task = Task {
+            waiting.signal()
             try await signal.wait()
         }
 
-        // Allow time for wait to start
-        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
-
+        try await waiting.wait()
         signal.signal()
 
         try await task.value
@@ -46,13 +46,14 @@ struct AsyncSignalTests {
             completed.wrappedValue = true
         }
 
-        // Wait a bit to ensure the task has started waiting
-        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
-        #expect(!completed.wrappedValue)  // Should not be completed yet
+        // Waits for the task to actually be queued, rather than sleeping and assuming it got
+        // there. Nothing can have completed while a waiter is still pending.
+        try await signal.waitForWaiters(1, timeout: 10)
+        #expect(!completed.wrappedValue)
 
         signal.signal()
         try await task.value
-        #expect(completed.wrappedValue)  // Should now be completed
+        #expect(completed.wrappedValue)
     }
 
     @Test
@@ -70,7 +71,7 @@ struct AsyncSignalTests {
             completed.wrappedValue = true
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+        try await signal.waitForWaiters(1, timeout: 10)
         #expect(!completed.wrappedValue)
 
         signal.signal()
@@ -90,7 +91,7 @@ struct AsyncSignalTests {
             try await signal.wait()
         }
 
-        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+        try await signal.waitForWaiters(1, timeout: 10)
         task.cancel()
 
         await #expect(throws: CancellationError.self) {
@@ -116,25 +117,33 @@ struct AsyncSignalTests {
         }
     }
 
-    /// A signal already open when the waiter cancels resolves the race in favour of whichever
-    /// side wins first, but never hangs regardless of the outcome.
+    /// Signalling and cancelling reach the same waiter from two sides. Whichever wins, the task
+    /// has to end: the failure this guards against is a continuation nobody resumes.
+    ///
+    /// The iteration count is down from two hundred, which took nearly ten seconds on tvOS.
+    /// Waiting for the waiter to actually be queued is what makes each round exercise the
+    /// window, so a round is now worth much more than it was when most of them raced against a
+    /// task that had not reached the signal yet.
     @Test
     func signalAndCancelRaceNeverHangs() async throws {
-        for _ in 0..<200 {
+        for _ in 0..<50 {
             let signal = AsyncSignal()
 
             let task = Task {
                 try await signal.wait()
             }
 
+            try await signal.waitForWaiters(1, timeout: 10)
+
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { task.cancel() }
                 group.addTask { signal.signal() }
             }
 
-            try await withTaskTimeout(seconds: 1) {
+            try await withTaskTimeout(seconds: 10) {
                 _ = try? await task.value
             }
         }
     }
+
 }

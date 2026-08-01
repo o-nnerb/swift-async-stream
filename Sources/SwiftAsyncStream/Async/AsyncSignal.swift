@@ -149,3 +149,23 @@ extension AsyncSignal: CustomDebugStringConvertible {
             """
     }
 }
+
+// MARK: - Testing
+
+@_spi(Testing)
+extension AsyncSignal {
+
+    /// Tasks currently waiting for the signal.
+    public var waitingCount: Int {
+        locker.withLock { _storage.pendingOperations.count }
+    }
+
+    /// Suspends until ``waitingCount`` settles on `count`.
+    ///
+    /// Same reason as ``AsyncLock/waitForPendingOperations(_:timeout:)``: creating a `Task`
+    /// does not decide when it reaches the signal, so a test that needs a waiter to be queued
+    /// has to wait for it rather than sleep and assume.
+    public func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
+        try await waitForCount(count, timeout: timeout) { waitingCount }
+    }
+}

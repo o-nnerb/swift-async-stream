@@ -256,11 +256,28 @@ struct AsyncLockTests {
     @available(iOS 16, tvOS 16, macOS 13, watchOS 9, *)
     @Test
     func watchdogReportsASectionHeldPastItsDeadline() async throws {
+        let reported = AsyncSignal()
         let report = InlineProperty<String?>(wrappedValue: nil)
-        let lock = AsyncLock(watchdog: .init(seconds: 0.1) { report.wrappedValue = $0 })
+
+        let lock = AsyncLock(
+            watchdog: .init(seconds: 0.1) {
+                report.wrappedValue = $0
+                reported.signal()
+            }
+        )
 
         await lock.withLockVoid {
-            try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms, past the deadline
+            // Waits for the watchdog instead of holding the lock for a fixed time and assuming
+            // it will have fired. It runs on a detached utility task, which a loaded machine
+            // will happily starve past any deadline the test picks: this failed on watchOS and
+            // iPadOS with the whole test stretched to well over two seconds.
+            //
+            // The timeout is the failure mode, and it is generous on purpose. What is being
+            // tested is that the watchdog reports at all while the section is held, not how
+            // promptly a busy CI machine gets around to it.
+            try? await withTaskTimeout(seconds: 10) {
+                try await reported.wait()
+            }
         }
 
         #expect(report.wrappedValue?.contains("AsyncLock held for more than") == true)

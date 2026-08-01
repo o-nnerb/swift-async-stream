@@ -16,11 +16,19 @@ struct TaskTimeoutTests {
         #expect(value == 42)
     }
 
+    /// The body can never finish, so the deadline is the only way out.
+    ///
+    /// This used to race a fifty millisecond deadline against a one second sleep, which reads
+    /// as a comfortable margin and is not one: `addTask` creates a child, it does not run one,
+    /// and on a starved executor the group hands back whichever child happened to complete.
+    /// tvOS took eight seconds over this test and reported that nothing was thrown.
     @Test
     func throwsATaskTimeoutErrorWhenTheDeadlinePasses() async throws {
+        let neverSignalled = AsyncSignal()
+
         await #expect(throws: TaskTimeoutError.self) {
             try await withTaskTimeout(seconds: 0.05) {
-                try await Task.sleep(nanoseconds: 1_000_000_000)  // 1s, past the deadline
+                try await neverSignalled.wait()
             }
         }
     }
@@ -41,13 +49,15 @@ struct TaskTimeoutTests {
     @Test
     func cancellingTheCallerCancelsTheOperation() async throws {
         let started = AsyncSignal()
+        let neverSignalled = AsyncSignal()
         let cancelled = InlineProperty(wrappedValue: false)
 
         let task = Task {
-            try await withTaskTimeout(seconds: 5) {
+            try await withTaskTimeout(seconds: 30) {
                 started.signal()
+
                 do {
-                    try await Task.sleep(nanoseconds: 2_000_000_000)  // 2s
+                    try await neverSignalled.wait()
                 } catch {
                     cancelled.wrappedValue = true
                     throw error
@@ -66,22 +76,28 @@ struct TaskTimeoutTests {
     }
 
     /// Whichever side of the race loses is cancelled. Here the deadline wins, so the operation
-    /// has to be the one cancelled, not left running past the timeout.
+    /// has to be the one cancelled rather than left running past the timeout.
     @Test
     func losingTheTimeoutCancelsTheOperationInstead() async throws {
-        let cancelled = InlineProperty(wrappedValue: false)
+        let neverSignalled = AsyncSignal()
+        let cancelled = AsyncSignal()
 
         await #expect(throws: TaskTimeoutError.self) {
             try await withTaskTimeout(seconds: 0.05) {
                 do {
-                    try await Task.sleep(nanoseconds: 2_000_000_000)  // 2s
+                    try await neverSignalled.wait()
                 } catch {
-                    cancelled.wrappedValue = true
+                    cancelled.signal()
                     throw error
                 }
             }
         }
 
-        #expect(cancelled.wrappedValue)
+        // Waited for rather than asserted straight away. `withTaskTimeout` returns as soon as
+        // the deadline wins, and the losing child is cancelled and drained on the way out of
+        // the group, which is ordered after that but not instantaneous.
+        try await withTaskTimeout(seconds: 10) {
+            try await cancelled.wait()
+        }
     }
 }

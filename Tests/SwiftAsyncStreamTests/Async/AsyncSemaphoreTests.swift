@@ -29,24 +29,41 @@ private actor ConcurrencyProbe {
 
 struct AsyncSemaphoreTests {
 
+    /// Holds every admitted task inside the section until the test says otherwise, instead of
+    /// giving each one a fixed sleep and hoping the overlap happens.
+    ///
+    /// The sleeping version passed everywhere but took ten seconds on tvOS, which is the shape
+    /// of a test that is one bad scheduling day away from flaking. Here nothing is timed: the
+    /// permits are all taken, the test confirms that the rest are queued, and only then are
+    /// they released.
     @Test
-    func limitsConcurrencyToTheNumberOfPermits() async {
-        let semaphore = AsyncSemaphore(permits: 3)
+    func limitsConcurrencyToTheNumberOfPermits() async throws {
+        let permits = 3
+        let total = 30
+
+        let semaphore = AsyncSemaphore(permits: permits)
         let probe = ConcurrencyProbe()
+        let release = AsyncSignal()
 
         await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<30 {
+            for _ in 0..<total {
                 group.addTask {
                     await semaphore.withPermitVoid {
                         await probe.begin()
-                        try? await Task.sleep(nanoseconds: 5_000_000)  // 5ms
+                        try? await release.wait()
                         await probe.end()
                     }
                 }
             }
+
+            // Every permit taken, and everyone else queued behind them. Waiting for this shape
+            // is what guarantees the overlap the assertion is about.
+            try? await semaphore.waitForWaiters(total - permits, timeout: 10)
+
+            release.signal()
         }
 
-        #expect(await probe.peak == 3)
+        #expect(await probe.peak == permits)
     }
 
     @Test
@@ -72,7 +89,7 @@ struct AsyncSemaphoreTests {
         }
 
         // The permit came back despite the throw, so acquiring again does not hang.
-        try await withTaskTimeout(seconds: 1) {
+        try await withTaskTimeout(seconds: 10) {
             await semaphore.withPermitVoid {}
         }
     }
@@ -104,7 +121,7 @@ struct AsyncSemaphoreTests {
 
         semaphore.signal()
 
-        try await withTaskTimeout(seconds: 2) {
+        try await withTaskTimeout(seconds: 10) {
             for task in tasks.wrappedValue {
                 await task.value
             }
@@ -120,34 +137,34 @@ struct AsyncSemaphoreTests {
     @Test
     func cancelledWaiterStillTakesItsTurn() async throws {
         let semaphore = AsyncSemaphore(permits: 1)
-        let acquired = InlineProperty(wrappedValue: false)
+        let acquired = AsyncSignal()
 
         await semaphore.wait()
 
         let task = Task {
             await semaphore.withPermitVoid {
-                acquired.wrappedValue = true
+                acquired.signal()
             }
         }
 
         try await semaphore.waitForWaiters(1)
         task.cancel()
 
-        try await Task.sleep(nanoseconds: 100_000_000)  // 100ms
-        #expect(!acquired.wrappedValue)
+        // Still queued, because cancelling does not remove a waiter. Asserted through the
+        // queue rather than by waiting a while and hoping nothing happened.
+        #expect(semaphore.waitingCount == 1)
 
         semaphore.signal()
 
-        try await withTaskTimeout(seconds: 1) {
-            await task.value
+        try await withTaskTimeout(seconds: 10) {
+            try await acquired.wait()
         }
 
-        #expect(acquired.wrappedValue)
+        await task.value
     }
 
     // MARK: - Debugging
 
-    @available(iOS 16, tvOS 16, macOS 13, watchOS 9, *)
     @Test
     func debugDescriptionReportsAvailableAndWaitingCounts() async throws {
         let semaphore = AsyncSemaphore(permits: 2)
@@ -162,7 +179,7 @@ struct AsyncSemaphoreTests {
         #expect(semaphore.debugDescription.contains("waiting (1)"))
 
         semaphore.signal()
-        try await withTaskTimeout(seconds: 1) { await task.value }
+        try await withTaskTimeout(seconds: 10) { await task.value }
         semaphore.signal()
     }
 }

@@ -1,6 +1,8 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+import Dispatch
+
 // MARK: - TaskTimeoutError
 
 /// An error thrown when an operation wrapped by `withTaskTimeout` exceeds its deadline.
@@ -29,6 +31,9 @@ public struct TaskTimeoutError: Error, CustomStringConvertible, Sendable {
 /// The operation and the deadline run as children of the current task, so cancelling the
 /// caller cancels both, and whichever finishes first cancels the other.
 ///
+/// - Note: The deadline bounds waiting, not the work itself. An operation that produces a
+/// result returns it, even if it took longer than the deadline to get there.
+///
 /// - Parameters:
 ///   - seconds: The timeout duration in seconds.
 ///   - valueType: The type of value to return (inferred automatically).
@@ -44,7 +49,11 @@ public func withTaskTimeout<Value: Sendable>(
 ) async throws -> Value {
     precondition(seconds >= .zero, "withTaskTimeout requires a non negative timeout")
 
-    let nanoseconds = nanoseconds(from: seconds)
+    // Captured here, before anything is scheduled. `addTask` creates a child, it does not run
+    // one, so a deadline measured from inside that child starts whenever the executor gets
+    // around to it. Under load that pushed the deadline out by however long the child waited
+    // for a thread, which is precisely when a timeout is supposed to fire.
+    let deadline = DispatchTime.now().uptimeNanoseconds &+ nanoseconds(from: seconds)
 
     return try await withThrowingTaskGroup(of: Value.self) { group in
         group.addTask {
@@ -52,7 +61,12 @@ public func withTaskTimeout<Value: Sendable>(
         }
 
         group.addTask {
-            try await Task.sleep(nanoseconds: nanoseconds)
+            let now = DispatchTime.now().uptimeNanoseconds
+
+            if deadline > now {
+                try await Task.sleep(nanoseconds: deadline - now)
+            }
+
             throw TaskTimeoutError(seconds: seconds)
         }
 
@@ -64,6 +78,11 @@ public func withTaskTimeout<Value: Sendable>(
             throw CancellationError()
         }
 
+        // Returned even if the clock says the deadline has passed. A timeout bounds waiting,
+        // and there is nothing left to wait for once the operation has produced a result.
+        // Checking the clock here would throw away work that succeeded, which on a machine
+        // that descheduled the caller for a moment means discarding a response that arrived
+        // in time.
         return value
     }
 }
