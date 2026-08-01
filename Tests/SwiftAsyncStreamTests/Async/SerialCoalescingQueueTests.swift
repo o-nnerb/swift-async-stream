@@ -1,9 +1,8 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: MIT
 
-import Testing
-
 @_spi(Testing) import SwiftAsyncStream
+import Testing
 
 // MARK: - Fixtures
 
@@ -42,7 +41,9 @@ private actor Gate {
 
         let pending = waiters
         waiters = []
-        pending.forEach { $0.resume() }
+        for waiter in pending {
+            waiter.resume()
+        }
     }
 }
 
@@ -65,7 +66,10 @@ private actor Recorder {
 
         let ready = waiters.filter { ids.count >= $0.target }
         waiters.removeAll { ids.count >= $0.target }
-        ready.forEach { $0.continuation.resume() }
+
+        for waiter in ready {
+            waiter.continuation.resume()
+        }
     }
 
     func end() {

@@ -1,7 +1,5 @@
 // Copyright 2026 Brenno Giovanini de Moura
-// SPDX-License-Identifier: MIT
-
-import Foundation
+// SPDX-License-Identifier: Apache-2.0
 
 // MARK: - CoalescingJob
 
@@ -19,10 +17,10 @@ public protocol CoalescingJob: Equatable, Sendable {
     var isCoalescable: Bool { get }
 }
 
-public extension CoalescingJob {
+extension CoalescingJob {
 
     /// A default implementation that allows equal adjacent jobs to share an execution.
-    var isCoalescable: Bool { true }
+    public var isCoalescable: Bool { true }
 }
 
 // MARK: - SerialCoalescingQueue
@@ -38,6 +36,14 @@ public extension CoalescingJob {
 /// Batched callers never receive stale data. A batch stops accepting callers the
 /// moment it leaves the queue to execute, so every caller in it called before the
 /// execution started.
+///
+/// - Important: `operation` must be a function of `job`. When two submissions coalesce, only
+/// the first `operation` runs and the second is discarded, so equal jobs carrying different
+/// closures would silently hand back the wrong work.
+///
+/// - Important: The queue is serial and offers no reentrancy. An `operation` that submits back
+/// into the same queue deadlocks: the new batch is enqueued behind the drain that is waiting on
+/// the very operation making the call.
 public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
 
     /// A closure that performs the work for a given `Job`.
@@ -47,7 +53,7 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
     public typealias Operation = @Sendable (Job) async throws -> Output
 
     fileprivate struct Waiter {
-        let id: UUID
+        let id: Int
         let continuation: CheckedContinuation<Result<Output, Error>, Never>
     }
 
@@ -60,6 +66,37 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
     private var batches = [Batch]()
     private var isRunning = false
     private var drainTask: Task<Void, Never>?
+
+    // A waiter only has to be distinguishable from the other waiters of this queue, and IDs are
+    // handed out under actor isolation, so a counter beats a UUID on every axis: no entropy, no
+    // allocation, cheaper comparisons, and no Foundation dependency.
+    private var nextWaiterID = 0
+
+    // The dispatched batch is deliberately out of `batches` so it can no longer be joined or
+    // cancelled, which also makes it invisible. Kept here purely so a stalled queue can name
+    // the job that is holding it, instead of only listing the ones waiting behind it.
+    private var runningBatch: Batch?
+
+    /// A snapshot of the queue, naming the job currently executing and the ones behind it.
+    ///
+    /// Actor isolated, so read it with `await queue.debugDescription`.
+    public var debugDescription: String {
+        let running = runningBatch.map {
+            "\($0.job) (\($0.waiters.count) waiters)"
+        }
+
+        let pending =
+            batches
+            .map { "  - \($0.job) (\($0.waiters.count) waiters)" }
+            .joined(separator: "\n")
+
+        return """
+            SerialCoalescingQueue
+            running: \(running ?? "none")
+            pending (\(batches.count)):
+            \(pending.isEmpty ? "  - none" : pending)
+            """
+    }
 
     /// Creates a new, empty queue.
     public init() {}
@@ -77,7 +114,8 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
     /// - Throws: Any error thrown by the `operation`, or `CancellationError` if the task
     ///           is cancelled before or during execution.
     public func submit(_ job: Job, operation: @escaping Operation) async throws -> Output {
-        let id = UUID()
+        let id = nextWaiterID
+        nextWaiterID += 1
 
         let result = await withTaskCancellationHandler {
             await enqueue(id: id, job: job, operation: operation)
@@ -86,6 +124,10 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
             // `onCancel` is synchronous and nonisolated. `Task` rather than
             // `Task.detached` so the hop keeps the cancelling caller's priority
             // instead of dropping to the default one.
+            //
+            // Landing late is harmless. Arriving before `enqueue` leaves the waiter to the
+            // `Task.isCancelled` check, and arriving after dispatch leaves it to the batch.
+            // Every path ends with somebody resuming the continuation.
             Task { await self.cancel(id) }
         }
 
@@ -107,72 +149,44 @@ public actor SerialCoalescingQueue<Job: CoalescingJob, Output: Sendable> {
 // MARK: - Testing
 
 @_spi(Testing)
-public extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
     /// Batches waiting to be dispatched.
-    var pendingBatchCount: Int {
+    public var pendingBatchCount: Int {
         batches.count
     }
 
     /// Callers waiting across every pending batch.
-    var pendingWaiterCount: Int {
+    public var pendingWaiterCount: Int {
         batches.reduce(.zero) { $0 + $1.waiters.count }
+    }
+
+    /// The job currently executing, if any.
+    ///
+    /// Not part of `pendingBatchCount` or `pendingWaiterCount`: a dispatched batch has left
+    /// the queue.
+    public var runningJob: Job? {
+        runningBatch?.job
     }
 
     /// Suspends until `pendingWaiterCount` settles on `count`.
     ///
     /// Creating a `Task` does not decide when it reaches the actor, so a test that
     /// needs a known queue shape has to wait for it instead of assuming it.
-    @available(iOS 16, macOS 13, tvOS 16, watchOS 9, *)
-    func waitForPendingWaiters(
+    public func waitForPendingWaiters(
         _ count: Int,
-        timeout: Duration = .seconds(2)
+        timeout: Double = 2
     ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-
-        while pendingWaiterCount != count {
-            guard ContinuousClock.now < deadline else {
-                throw PendingWaitersTimeout(expected: count, found: pendingWaiterCount)
-            }
-
-            try await Task.sleep(for: .milliseconds(1))
-        }
-    }
-}
-
-/// An error thrown when `waitForPendingWaiters` exceeds its timeout.
-///
-/// This usually indicates a race condition or a deadlock in tests where
-/// tasks are not being enqueued as expected.
-@_spi(Testing)
-public struct PendingWaitersTimeout: Error, CustomStringConvertible {
-
-    /// The number of pending waiters the test expected to find.
-    public let expected: Int
-
-    /// The actual number of pending waiters found when the timeout occurred.
-    public let found: Int
-
-    public var description: String {
-        "Timed out waiting for \(expected) pending waiters, found \(found)"
-    }
-
-    /// Creates a new timeout error.
-    /// - Parameters:
-    ///   - expected: The expected number of pending waiters.
-    ///   - found: The actual number of pending waiters found.
-    init(expected: Int, found: Int) {
-        self.expected = expected
-        self.found = found
+        try await waitForCount(count, timeout: timeout) { self.pendingWaiterCount }
     }
 }
 
 // MARK: - Enqueueing
 
-private extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
-    func enqueue(
-        id: UUID,
+    fileprivate func enqueue(
+        id: Int,
         job: Job,
         operation: @escaping Operation
     ) async -> Result<Output, Error> {
@@ -204,7 +218,7 @@ private extension SerialCoalescingQueue {
     ///
     /// When the last caller of a batch cancels, the batch is dropped and never
     /// runs.
-    func cancel(_ id: UUID) {
+    fileprivate func cancel(_ id: Int) {
         for index in batches.indices {
             guard let waiterIndex = batches[index].waiters.firstIndex(where: { $0.id == id }) else {
                 continue
@@ -223,9 +237,9 @@ private extension SerialCoalescingQueue {
 
 // MARK: - Draining
 
-private extension SerialCoalescingQueue {
+extension SerialCoalescingQueue {
 
-    func startIfNeeded() {
+    fileprivate func startIfNeeded() {
         guard !isRunning, !batches.isEmpty else {
             return
         }
@@ -235,9 +249,10 @@ private extension SerialCoalescingQueue {
         drainTask = Task { await self.drain() }
     }
 
-    func drain() async {
+    fileprivate func drain() async {
         defer {
             isRunning = false
+            runningBatch = nil
             // Breaks the actor to task retain cycle. Clearing it from inside the
             // task is fine, a running task keeps itself alive.
             drainTask = nil
@@ -245,6 +260,8 @@ private extension SerialCoalescingQueue {
 
         while !batches.isEmpty {
             let batch = batches.removeFirst()
+            runningBatch = batch
+
             let result: Result<Output, Error>
 
             do {
@@ -253,7 +270,10 @@ private extension SerialCoalescingQueue {
                 result = .failure(error)
             }
 
-            batch.waiters.forEach { $0.continuation.resume(returning: result) }
+            runningBatch = nil
+            for waiter in batch.waiters {
+                waiter.continuation.resume(returning: result)
+            }
         }
     }
 }

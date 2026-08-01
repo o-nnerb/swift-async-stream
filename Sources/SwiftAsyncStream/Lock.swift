@@ -14,8 +14,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 #if canImport(Darwin)
 import Darwin
 import os.lock
@@ -34,7 +32,9 @@ import WinSDK
 import wasi_pthread
 #endif
 #else
-#error("The Lock module was unable to identify your C library. Supported libraries are Glibc, Musl, Bionic, WASILibc, Darwin, and Windows SDK.")
+#error(
+    "The Lock module was unable to identify your C library. Supported libraries are Glibc, Musl, Bionic, WASILibc, Darwin, and Windows SDK."
+)
 #endif
 
 /// A thread-safe lock that provides mutual exclusion using platform-specific locking mechanisms.
@@ -42,6 +42,12 @@ import wasi_pthread
 /// - On Linux/Unix platforms: uses `pthread_mutex` with error checking in debug builds.
 /// - On Windows: uses `SRWLOCK`.
 /// - On WASI: no-op in single-threaded environments; uses pthread when available.
+///
+/// - Warning: The lock is **not** reentrant. Acquiring it twice on the same thread deadlocks,
+/// and debug builds on platforms with error checking trap instead.
+///
+/// - Warning: Never resume a continuation or invoke caller supplied code while holding the
+/// lock. Compute what has to happen inside the critical section, release, then act.
 public struct Lock: Sendable {
     private let storage = Storage()
 
@@ -63,7 +69,9 @@ public struct Lock: Sendable {
     /// - Returns: The value returned by the closure.
     /// - Throws: Errors thrown by the closure.
     @discardableResult
-    public func withLock<Output>(_ body: () throws -> Output) rethrows -> Output {
+    public func withLock<Output, Failure: Error>(
+        _ body: () throws(Failure) -> Output
+    ) throws(Failure) -> Output {
         lock()
         defer { unlock() }
         return try body()
@@ -72,15 +80,17 @@ public struct Lock: Sendable {
     /// Executes the given closure while holding the lock (void return).
     /// - Parameter body: The closure to execute.
     /// - Throws: Errors thrown by the closure.
-    public func withLockVoid(_ body: () throws -> Void) rethrows {
+    public func withLockVoid<Failure: Error>(
+        _ body: () throws(Failure) -> Void
+    ) throws(Failure) {
         try withLock(body)
     }
 }
 
 // MARK: - Storage Implementation
 
-private extension Lock {
-    final class Storage: @unchecked Sendable {
+extension Lock {
+    fileprivate final class Storage: @unchecked Sendable {
         #if os(Windows)
         private let mutex: UnsafeMutablePointer<SRWLOCK> =
             UnsafeMutablePointer.allocate(capacity: 1)
@@ -92,7 +102,11 @@ private extension Lock {
         // Single-threaded WASI requires no storage
 
         #elseif canImport(Darwin)
-        private var unfairLock = os_unfair_lock()
+        // Heap allocated rather than a stored property. `os_unfair_lock` requires a stable
+        // address, and `&someStoredProperty` is a copy-in/copy-out access under the Swift
+        // memory model, so it can hand the C function a temporary. Concurrent calls would also
+        // open overlapping exclusive accesses to the same property.
+        private let unfairLock: os_unfair_lock_t
 
         #elseif os(OpenBSD)
         // OpenBSD uses nullable pthread_mutex_t
@@ -114,7 +128,8 @@ private extension Lock {
             #endif
 
             #elseif canImport(Darwin)
-            // os_unfair_lock requires no explicit initialization
+            unfairLock = .allocate(capacity: 1)
+            unfairLock.initialize(to: os_unfair_lock())
 
             #elseif os(OpenBSD)
             mutexPtr = UnsafeMutablePointer.allocate(capacity: 1)
@@ -138,7 +153,8 @@ private extension Lock {
             #endif
 
             #elseif canImport(Darwin)
-            // os_unfair_lock requires no explicit deinitialization
+            unfairLock.deinitialize(count: 1)
+            unfairLock.deallocate()
 
             #elseif os(OpenBSD) || canImport(Glibc) || canImport(Musl) || canImport(Bionic)
             destroyAndDeallocatePThreadMutex(mutexPtr)
@@ -157,7 +173,7 @@ private extension Lock {
             // No-op in single-threaded WASI
 
             #elseif canImport(Darwin)
-            os_unfair_lock_lock(&unfairLock)
+            os_unfair_lock_lock(unfairLock)
 
             #elseif os(OpenBSD)
             let err = pthread_mutex_lock(mutexPtr)
@@ -181,7 +197,7 @@ private extension Lock {
             // No-op in single-threaded WASI
 
             #elseif canImport(Darwin)
-            os_unfair_lock_unlock(&unfairLock)
+            os_unfair_lock_unlock(unfairLock)
 
             #elseif os(OpenBSD)
             let err = pthread_mutex_unlock(mutexPtr)
@@ -236,6 +252,13 @@ private extension Lock {
     }
 }
 
+extension Lock: CustomDebugStringConvertible {
+
+    public var debugDescription: String {
+        "Lock"
+    }
+}
+
 // MARK: - Debug Utilities
 
 /// Executes the given closure only in debug builds.
@@ -243,5 +266,10 @@ private extension Lock {
 /// This is currently the only way to do this in Swift without compiler warnings.
 /// See: https://forums.swift.org/t/support-debug-only-code/11037
 private func debugOnly(_ body: () -> Void) {
-    assert({ body(); return true }())
+    assert(
+        {
+            body()
+            return true
+        }()
+    )
 }

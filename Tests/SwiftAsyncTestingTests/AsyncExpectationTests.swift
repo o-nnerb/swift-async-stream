@@ -1,113 +1,97 @@
-import Testing
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 import SwiftAsyncTesting
+import Testing
 
 struct AsyncExpectationTests {
 
-    @Test("AsyncExpectation fulfills and waits properly")
-    func testBasicFulfillment() async throws {
-        let expectation = AsyncExpectation(description: "Test expectation")
+    @Test
+    func fulfillingAllExpectationsResolvesTheWait() async throws {
+        let first = AsyncExpectation()
+        let second = AsyncExpectation()
 
         Task {
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms delay
+            first.fulfill()
+            second.fulfill()
+        }
+
+        try await expectations([first, second], timeout: 1)
+    }
+
+    @Test
+    func aNeverFulfilledExpectationThrowsATimeoutNamingItself() async throws {
+        let expectation = AsyncExpectation(description: "arrives-late")
+
+        await #expect(throws: AsyncExpectationTimeout.self) {
+            try await expectations([expectation], timeout: 0.2)
+        }
+    }
+
+    /// The bug this guards against: `fulfill()` read, incremented and compared the counter as
+    /// three separate locked operations, so concurrent callers could lose an increment and the
+    /// expectation would wait for a count it could no longer reach.
+    @Test
+    func expectedFulfillmentCountIsAtomicUnderConcurrentFulfillment() async throws {
+        let expectation = AsyncExpectation()
+        expectation.expectedFulfillmentCount = 100
+
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<100 {
+                group.addTask {
+                    expectation.fulfill()
+                }
+            }
+        }
+
+        try await expectations([expectation], timeout: 1)
+    }
+
+    @Test
+    func overFulfillingRecordsAnIssue() async {
+        let expectation = AsyncExpectation()
+
+        withKnownIssue {
+            expectation.fulfill()
+            expectation.fulfill()
+        }
+    }
+
+    @Test
+    func overFulfillingCanBeOptedOut() async throws {
+        let expectation = AsyncExpectation()
+        expectation.assertForOverFulfill = false
+
+        expectation.fulfill()
+        expectation.fulfill()
+
+        try await expectations([expectation], timeout: 1)
+    }
+
+    // MARK: - Inverted expectations
+
+    /// The bug this guards against: fulfilling an inverted expectation only recorded the
+    /// failure, it never released the wait, so the suite paid the full timeout even though
+    /// the outcome was already known.
+    @Test
+    func fulfillingAnInvertedExpectationFailsAndReturnsImmediately() async throws {
+        let expectation = AsyncExpectation()
+        expectation.isInverted = true
+
+        withKnownIssue {
             expectation.fulfill()
         }
 
-        try await expectations([expectation], timeout: 5.0)
-    }
-
-    @Test("AsyncExpectation with multiple fulfillments")
-    func testMultipleFulfillments() async throws {
-        let expectation = AsyncExpectation(description: "Multiple fulfillment test")
-        expectation.expectedFulfillmentCount = 3
-
-        Task {
-            for _ in 0..<3 {
-                try? await Task.sleep(nanoseconds: 25_000_000) // 25ms delay between fulfillments
-                expectation.fulfill()
-            }
-        }
-
-        try await expectations([expectation], timeout: 5.0)
-    }
-
-    @Test("AsyncExpectation timeout handling")
-    func testTimeout() async {
-        let expectation = AsyncExpectation(description: "Timeout test")
-
-        // Don't fulfill the expectation - this should cause a timeout
-        await #expect(throws: CancellationError.self) {
-            try await expectations([expectation], timeout: 0.1) // Very short timeout
+        try await withTaskTimeout(seconds: 1) {
+            try await expectations([expectation], timeout: 60)
         }
     }
 
-    @Test("Multiple expectations wait for all")
-    func testMultipleExpectations() async throws {
-        let expectation1 = AsyncExpectation(description: "First expectation")
-        let expectation2 = AsyncExpectation(description: "Second expectation")
+    @Test
+    func anInvertedExpectationThatIsNeverFulfilledPassesAfterItsTimeout() async throws {
+        let expectation = AsyncExpectation()
+        expectation.isInverted = true
 
-        Task {
-            try? await Task.sleep(nanoseconds: 25_000_000)
-            expectation1.fulfill()
-        }
-
-        Task {
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            expectation2.fulfill()
-        }
-
-        try await expectations([expectation1, expectation2], timeout: 5.0)
-    }
-
-    @Test("Inverted expectation fails when fulfilled")
-    func testInvertedExpectation() async {
-        await withKnownIssue {
-            let expectation = AsyncExpectation(description: "Inverted test")
-            expectation.isInverted = true
-
-            Task {
-                try? await Task.sleep(nanoseconds: 25_000_000)
-                expectation.fulfill() // This should cause a test failure
-            }
-
-            // We expect this to record an issue since the inverted expectation was fulfilled
-            try? await expectations([expectation], timeout: 1.0)
-        } matching: { issue in
-            issue.comments.contains("Inverted expectation was fulfilled, which is a failure.")
-        }
-    }
-
-    @Test("AsyncExpectation handles over-fulfillment")
-    func testOverFulfillment() async throws {
-        try await withKnownIssue {
-            let assertionTracker = AsyncExpectation()
-            let expectation = AsyncExpectation(description: "Over-fulfillment test")
-            expectation.expectedFulfillmentCount = 1
-            expectation.assertForOverFulfill = true
-
-            Task {
-                try? await Task.sleep(nanoseconds: 25_000_000)
-                expectation.fulfill() // First fulfillment
-                expectation.fulfill() // This should trigger an assertion
-                assertionTracker.fulfill()
-            }
-
-            try await expectations([expectation, assertionTracker], timeout: 5.0)
-        } matching: { issue in
-            issue.comments.contains("Expected fulfill count to be 1, got 2.")
-        }
-    }
-
-    @Test("AsyncExpectation works with Task timeout")
-    func testTaskTimeout() async throws {
-        let expectation = AsyncExpectation(description: "Task timeout test")
-
-        Task {
-            // Simulate an async operation that completes within timeout
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-            expectation.fulfill()
-        }
-
-        try await expectations([expectation], timeout: 2.0)
+        try await expectations([expectation], timeout: 0.2)
     }
 }
-
