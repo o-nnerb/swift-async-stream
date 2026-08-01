@@ -1,8 +1,9 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
-@_spi(Testing) @testable import SwiftAsyncStream
 import Testing
+
+@_spi(Testing) @testable import SwiftAsyncStream
 
 struct ReplaySubjectTests {
 

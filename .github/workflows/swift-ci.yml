@@ -30,12 +30,12 @@ jobs:
     runs-on: macos-26
     steps:
       - name: ☑️ Swift Select
-        uses: SwiftyLab/setup-swift@v1.12.0
+        uses: SwiftyLab/setup-swift@v1.14.0
         with:
-          swift-version: '6.2'
+          swift-version: '6.3'
 
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: 🎨 Check Formatting
         run: |
@@ -54,51 +54,68 @@ jobs:
   breaking-changes:
     name: "💔 Breaking Changes"
     needs: format-check
+    if: |
+      always() &&
+      (needs.format-check.result == 'success' || needs.format-check.result == 'skipped')
     runs-on: macos-26
     steps:
       - name: ☑️ Swift Select
-        uses: SwiftyLab/setup-swift@v1.12.0
+        uses: SwiftyLab/setup-swift@v1.14.0
         with:
-          swift-version: '6.2'
+          swift-version: '6.3'
 
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: 💔 Checking API Breaking Changes
+        env:
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          PR_BRANCH: ${{ github.head_ref }}
         run: |
-          # Em push para main, apenas passa (não há PR para validar)
+          # ── Skip on push to main ────────────────────────────
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "Push to main detected, skipping breaking changes check"
+            echo "Push to main detected, skipping"
             exit 0
           fi
 
+          # ── OVERRIDE 1: Label no PR ─────────────────────────
+          if echo "$PR_LABELS" | grep -qiE '"major(-release)?|"breaking-change|"release/major'; then
+            echo "🏷️  Label de major release detectada, skipping breaking changes"
+            echo "Labels: $PR_LABELS"
+            exit 0
+          fi
+
+          # ── OVERRIDE 2: Nome da branch ──────────────────────
+          if echo "$PR_BRANCH" | grep -qE '^(release/v[0-9]|v[0-9]|major|next-major)'; then
+            echo "🌿 Branch '$PR_BRANCH' indica major release, skipping"
+            exit 0
+          fi
+
+          # ── Detecção automática por major bump ──────────────
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$latest_tag" ]; then
-            echo "No tags found, skipping breaking changes check"
+            echo "No tags found, skipping"
             exit 0
           fi
           echo "Latest tag: $latest_tag"
 
-          # Check for major version bump
           tag_version="${latest_tag#v}"
           latest_major=$(echo "$tag_version" | cut -d. -f1)
-
           current_ref="${{ github.ref_name }}"
           ref_version="${current_ref#v}"
           current_major=$(echo "$ref_version" | cut -d. -f1)
 
           if [[ "$latest_major" =~ ^[0-9]+$ ]] && [[ "$current_major" =~ ^[0-9]+$ ]]; then
             if [ "$latest_major" != "$current_major" ]; then
-              echo "⚠️  Major version bump detected ($latest_tag -> $current_ref)"
-              echo "Skipping breaking changes check"
+              echo "⚠️  Major bump detectado ($latest_tag → $current_ref)"
               exit 0
             fi
           fi
 
           echo "Checking breaking changes against $latest_tag"
-          swift package diagnose-api-breaking-changes $latest_tag
+          swift package diagnose-api-breaking-changes "$latest_tag"
 
   # ═══════════════════════════════════════════════════════════════
   # ETAPA 3A: Apple Tests (só após breaking-changes aprovar)
@@ -106,6 +123,9 @@ jobs:
   apple-tests:
     name: "🍎 Apple Tests - ${{ matrix.name }}"
     needs: breaking-changes
+    if: |
+      always() &&
+      (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -127,7 +147,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: 🍺 Homebrew Dependencies
         run: brew install xcbeautify
@@ -161,7 +181,7 @@ jobs:
           find .xcbuild -name "*.xctest" -not -path "*/.dSYM/*" -exec cp -r {} coverage-artifacts/ \; 2>/dev/null || true
 
       - name: 📤 Upload Coverage Data
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: apple-${{ matrix.name }}
           path: coverage-artifacts/
@@ -172,6 +192,9 @@ jobs:
   third-party-tests:
     name: "🔧 Third Party - ${{ matrix.name }}"
     needs: breaking-changes
+    if: |
+      always() &&
+      (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -183,12 +206,12 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: ☑️ Swift Select
-        uses: SwiftyLab/setup-swift@v1.12.0
+        uses: SwiftyLab/setup-swift@v1.14.0
         with:
           swift-version: '6.2'
 
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: ⚒️ Test Package
         run: swift test --enable-code-coverage
@@ -221,7 +244,7 @@ jobs:
           }
 
       - name: 📤 Upload Artifacts
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: third-party-${{ matrix.name }}
           path: coverage-artifacts/
@@ -232,14 +255,17 @@ jobs:
   wasm-tests:
     name: "🕸️ WebAssembly"
     needs: breaking-changes
+    if: |
+      always() &&
+      (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     runs-on: macos-26
     continue-on-error: true
     steps:
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: ☑️ Swift Select
-        uses: SwiftyLab/setup-swift@v1.12.0
+        uses: SwiftyLab/setup-swift@v1.14.0
         with:
           swift-version: '6.2'
 
@@ -261,13 +287,15 @@ jobs:
     name: "📤 Coverage Upload"
     runs-on: macos-26
     needs: [apple-tests, third-party-tests]
-    if: always()
+    if: |
+      always() &&
+      (needs.apple-tests.result != 'cancelled' || needs.third-party-tests.result != 'cancelled')
     steps:
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: 📥 Download All Artifacts
-        uses: actions/download-artifact@v5.0.0
+        uses: actions/download-artifact@v7.0.0
         with:
           path: artifacts
 
@@ -305,7 +333,7 @@ jobs:
           done
 
       - name: 📦 Upload to Codecov
-        uses: codecov/codecov-action@v5.5.1
+        uses: codecov/codecov-action@v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: "*.lcov"
