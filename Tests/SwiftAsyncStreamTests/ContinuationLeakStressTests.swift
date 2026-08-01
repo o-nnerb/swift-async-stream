@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Testing
+
 @_spi(Testing) @testable import SwiftAsyncStream
 
 /// Counts finished tasks and signals once they are all in.
