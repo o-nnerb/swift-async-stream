@@ -268,8 +268,8 @@ jobs:
       - name: 🕸️ Install WebAssembly SDK
         run: |
           SWIFT_VERSION="6.2"
-          SDK_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm32-unknown-wasi/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_wasm32-unknown-wasi.artifactbundle.zip"
-          SDK_FILENAME="swift-${SWIFT_VERSION}-RELEASE_wasm32-unknown-wasi.artifactbundle.zip"
+          SDK_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_wasm.artifactbundle.tar.gz"
+          SDK_FILENAME="swift-${SWIFT_VERSION}-RELEASE_wasm.artifactbundle.tar.gz"
 
           echo "Downloading SDK from: $SDK_URL"
           curl -L "$SDK_URL" -o "$SDK_FILENAME"
