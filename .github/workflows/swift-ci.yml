@@ -336,12 +336,71 @@ jobs:
           fi
 
   # ═══════════════════════════════════════════════════════════════
+  # ETAPA 3D: Sanitizers (Thread + Address com stress tests)
+  # ═══════════════════════════════════════════════════════════════
+  sanitizers:
+    name: "🛡️ Sanitizers - ${{ matrix.sanitizer }}"
+    needs: breaking-changes
+    if: |
+      always() &&
+      (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [thread, address]
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: ⬇️ Get Sources
+        uses: actions/checkout@v6.0.2
+
+      - name: 🍺 Homebrew Dependencies
+        run: brew install xcbeautify
+
+      - name: ☑️ Xcode Select
+        run: sudo xcode-select -switch /Applications/Xcode_26.6.app
+
+      - name: ⚒️ Build with Sanitizer
+        env:
+          NSUnbufferedIO: YES
+        run: |
+          set -o pipefail && xcodebuild build-for-testing \
+            -scheme "SwiftAsyncStream-Package" \
+            -destination "platform=macOS,arch=arm64" \
+            -enableAddressSanitizer ${{ matrix.sanitizer == 'address' && 'YES' || 'NO' }} \
+            -enableThreadSanitizer ${{ matrix.sanitizer == 'thread' && 'YES' || 'NO' }} \
+            -derivedDataPath .xcbuild 2>&1 | xcbeautify --quiet --renderer github-actions
+
+      - name: 🧪 Run Tests with Sanitizer (Regular Suite)
+        env:
+          NSUnbufferedIO: YES
+        run: |
+          set -o pipefail && xcodebuild test-without-building \
+            -scheme "SwiftAsyncStream-Package" \
+            -destination "platform=macOS,arch=arm64" \
+            -enableAddressSanitizer ${{ matrix.sanitizer == 'address' && 'YES' || 'NO' }} \
+            -enableThreadSanitizer ${{ matrix.sanitizer == 'thread' && 'YES' || 'NO' }} \
+            -derivedDataPath .xcbuild 2>&1 | xcbeautify --renderer github-actions
+
+      - name: 🔥 Run Stress Tests with Sanitizer
+        env:
+          NSUnbufferedIO: YES
+        run: |
+          set -o pipefail && xcodebuild test-without-building \
+            -scheme "SwiftAsyncStream-Package" \
+            -destination "platform=macOS,arch=arm64" \
+            -enableAddressSanitizer ${{ matrix.sanitizer == 'address' && 'YES' || 'NO' }} \
+            -enableThreadSanitizer ${{ matrix.sanitizer == 'thread' && 'YES' || 'NO' }} \
+            -only-testing:SwiftAsyncStreamTests/ContinuationLeakStressTests \
+            -derivedDataPath .xcbuild 2>&1 | xcbeautify --renderer github-actions
+
+  # ═══════════════════════════════════════════════════════════════
   # ETAPA 4: Coverage Upload (só após todos os tests passarem)
   # ═══════════════════════════════════════════════════════════════
   coverage-upload:
     name: "📤 Coverage Upload"
     runs-on: macos-26
-    needs: [apple-tests, third-party-tests, linkage-test]
+    needs: [apple-tests, third-party-tests, linkage-test, sanitizers]
     if: |
       always() &&
       (needs.apple-tests.result != 'cancelled' || needs.third-party-tests.result != 'cancelled')
