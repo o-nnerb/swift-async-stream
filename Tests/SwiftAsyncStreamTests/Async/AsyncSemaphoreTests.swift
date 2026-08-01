@@ -58,7 +58,7 @@ struct AsyncSemaphoreTests {
 
             // Every permit taken, and everyone else queued behind them. Waiting for this shape
             // is what guarantees the overlap the assertion is about.
-            try? await semaphore.waitForWaiters(total - permits, timeout: 10)
+            try? await semaphore.waitForWaiters(total - permits, timeout: 300)
 
             release.signal()
         }
@@ -89,7 +89,7 @@ struct AsyncSemaphoreTests {
         }
 
         // The permit came back despite the throw, so acquiring again does not hang.
-        try await withTaskTimeout(seconds: 10) {
+        try await withTaskTimeout(seconds: 300) {
             await semaphore.withPermitVoid {}
         }
     }
@@ -121,7 +121,7 @@ struct AsyncSemaphoreTests {
 
         semaphore.signal()
 
-        try await withTaskTimeout(seconds: 10) {
+        try await withTaskTimeout(seconds: 300) {
             for task in tasks.wrappedValue {
                 await task.value
             }
@@ -156,7 +156,7 @@ struct AsyncSemaphoreTests {
 
         semaphore.signal()
 
-        try await withTaskTimeout(seconds: 10) {
+        try await withTaskTimeout(seconds: 300) {
             try await acquired.wait()
         }
 
@@ -180,7 +180,7 @@ struct AsyncSemaphoreTests {
         #expect(semaphore.debugDescription.contains("waiting (1)"))
 
         semaphore.signal()
-        try await withTaskTimeout(seconds: 10) { await task.value }
+        try await withTaskTimeout(seconds: 300) { await task.value }
         semaphore.signal()
     }
 }

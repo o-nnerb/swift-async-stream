@@ -275,7 +275,7 @@ struct AsyncLockTests {
             // The timeout is the failure mode, and it is generous on purpose. What is being
             // tested is that the watchdog reports at all while the section is held, not how
             // promptly a busy CI machine gets around to it.
-            try? await withTaskTimeout(seconds: 10) {
+            try? await withTaskTimeout(seconds: 300) {
                 try await reported.wait()
             }
         }

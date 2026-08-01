@@ -5,15 +5,15 @@ on:
     branches: [main]
     paths:
       - 'Package.swift'
-      - 'Sources/'
-      - 'Tests/'
+      - 'Sources/**'
+      - 'Tests/**'
       - '.swift-format'
   pull_request:
     branches: [main]
     paths:
       - 'Package.swift'
-      - 'Sources/'
-      - 'Tests/'
+      - 'Sources/**'
+      - 'Tests/**'
       - '.swift-format'
       - '.github/workflows/swift-ci.yml'
 
