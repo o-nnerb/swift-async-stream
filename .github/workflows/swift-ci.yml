@@ -140,7 +140,7 @@ jobs:
           NSUnbufferedIO: YES
         run: |
           set -o pipefail && xcodebuild build-for-testing \
-            -scheme "request-dl" \
+            -scheme "SwiftAsyncStream-Package" \
             -destination "${{ matrix.destination }}" \
             -derivedDataPath .xcbuild 2>&1 | xcbeautify --quiet --renderer github-actions
 
@@ -149,7 +149,7 @@ jobs:
           NSUnbufferedIO: YES
         run: |
           set -o pipefail && xcodebuild test-without-building \
-            -scheme "request-dl" \
+            -scheme "SwiftAsyncStream-Package" \
             -destination "${{ matrix.destination }}" \
             -enableCodeCoverage YES \
             -derivedDataPath .xcbuild 2>&1 | xcbeautify --renderer github-actions
