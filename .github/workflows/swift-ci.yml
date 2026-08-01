@@ -22,6 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 1: Validação de formatação
+  # ═══════════════════════════════════════════════════════════════
   format-check:
     name: "🎨 Format Check"
     runs-on: macos-26
@@ -45,8 +48,64 @@ jobs:
           fi
           echo "✅ Formatting check passed"
 
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 2: Breaking changes (só após format-check aprovar)
+  # ═══════════════════════════════════════════════════════════════
+  breaking-changes:
+    name: "💔 Breaking Changes"
+    needs: format-check
+    runs-on: macos-26
+    steps:
+      - name: ☑️ Swift Select
+        uses: SwiftyLab/setup-swift@v1.12.0
+        with:
+          swift-version: '6.2'
+
+      - name: ⬇️ Get Sources
+        uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: 💔 Checking API Breaking Changes
+        run: |
+          # Em push para main, apenas passa (não há PR para validar)
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Push to main detected, skipping breaking changes check"
+            exit 0
+          fi
+
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$latest_tag" ]; then
+            echo "No tags found, skipping breaking changes check"
+            exit 0
+          fi
+          echo "Latest tag: $latest_tag"
+
+          # Check for major version bump
+          tag_version="${latest_tag#v}"
+          latest_major=$(echo "$tag_version" | cut -d. -f1)
+
+          current_ref="${{ github.ref_name }}"
+          ref_version="${current_ref#v}"
+          current_major=$(echo "$ref_version" | cut -d. -f1)
+
+          if [[ "$latest_major" =~ ^[0-9]+$ ]] && [[ "$current_major" =~ ^[0-9]+$ ]]; then
+            if [ "$latest_major" != "$current_major" ]; then
+              echo "⚠️  Major version bump detected ($latest_tag -> $current_ref)"
+              echo "Skipping breaking changes check"
+              exit 0
+            fi
+          fi
+
+          echo "Checking breaking changes against $latest_tag"
+          swift package diagnose-api-breaking-changes $latest_tag
+
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 3A: Apple Tests (só após breaking-changes aprovar)
+  # ═══════════════════════════════════════════════════════════════
   apple-tests:
     name: "🍎 Apple Tests - ${{ matrix.name }}"
+    needs: breaking-changes
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +140,7 @@ jobs:
           NSUnbufferedIO: YES
         run: |
           set -o pipefail && xcodebuild build-for-testing \
-            -scheme "SwiftAsyncStream-Package" \
+            -scheme "request-dl" \
             -destination "${{ matrix.destination }}" \
             -derivedDataPath .xcbuild 2>&1 | xcbeautify --quiet --renderer github-actions
 
@@ -90,23 +149,16 @@ jobs:
           NSUnbufferedIO: YES
         run: |
           set -o pipefail && xcodebuild test-without-building \
-            -scheme "SwiftAsyncStream-Package" \
+            -scheme "request-dl" \
             -destination "${{ matrix.destination }}" \
             -enableCodeCoverage YES \
             -derivedDataPath .xcbuild 2>&1 | xcbeautify --renderer github-actions
-
-      - name: 🔍 Debug - List coverage files
-        run: |
-          echo "=== Looking for coverage files ==="
-          find .xcbuild -name "*.profdata" -o -name "*.xctest" 2>/dev/null || echo "No files found"
 
       - name: 🔀 Move Coverage Files
         run: |
           mkdir -p coverage-artifacts
           find .xcbuild -name "*.profdata" -exec cp {} coverage-artifacts/ \; 2>/dev/null || true
           find .xcbuild -name "*.xctest" -not -path "*/.dSYM/*" -exec cp -r {} coverage-artifacts/ \; 2>/dev/null || true
-          echo "=== Files moved to coverage-artifacts ==="
-          ls -la coverage-artifacts/
 
       - name: 📤 Upload Coverage Data
         uses: actions/upload-artifact@v4.6.2
@@ -114,8 +166,12 @@ jobs:
           name: apple-${{ matrix.name }}
           path: coverage-artifacts/
 
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 3B: Third Party Tests (só após breaking-changes aprovar)
+  # ═══════════════════════════════════════════════════════════════
   third-party-tests:
     name: "🔧 Third Party - ${{ matrix.name }}"
+    needs: breaking-changes
     strategy:
       fail-fast: false
       matrix:
@@ -143,27 +199,12 @@ jobs:
           echo "=== Running tests with USE_ESSENTIALS_ONLY flag ==="
           swift test --enable-code-coverage -Xswiftc -DUSE_ESSENTIALS_ONLY
 
-      - name: 🔍 Debug - List coverage files (Unix)
-        if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: |
-          echo "=== Looking for coverage files ==="
-          find .build -name "*.profdata" -o -name "*.xctest" 2>/dev/null || echo "No files found"
-
-      - name: 🔍 Debug - List coverage files (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Write-Host "=== Looking for coverage files ==="
-          Get-ChildItem -Path .build -Recurse -Include "*.profdata", "*.xctest" -ErrorAction SilentlyContinue
-
       - name: 🔀 Move Coverage Files (Unix)
         if: runner.os == 'Linux' || runner.os == 'macOS'
         run: |
           mkdir -p coverage-artifacts
           find .build -name "*.profdata" -exec cp {} coverage-artifacts/ \; 2>/dev/null || true
           find .build -name "*.xctest" -not -path "*/.dSYM/*" -exec cp -r {} coverage-artifacts/ \; 2>/dev/null || true
-          echo "=== Files moved to coverage-artifacts ==="
-          ls -la coverage-artifacts/
 
       - name: 🔀 Move Coverage Files (Windows)
         if: runner.os == 'Windows'
@@ -178,8 +219,6 @@ jobs:
           } | ForEach-Object {
               Copy-Item $_.FullName -Destination "coverage-artifacts" -Recurse -Force
           }
-          Write-Host "=== Files moved to coverage-artifacts ==="
-          Get-ChildItem -Path "coverage-artifacts"
 
       - name: 📤 Upload Artifacts
         uses: actions/upload-artifact@v4.6.2
@@ -187,8 +226,12 @@ jobs:
           name: third-party-${{ matrix.name }}
           path: coverage-artifacts/
 
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 3C: WebAssembly (só após breaking-changes aprovar, não bloqueia)
+  # ═══════════════════════════════════════════════════════════════
   wasm-tests:
     name: "🕸️ WebAssembly"
+    needs: breaking-changes
     runs-on: macos-26
     continue-on-error: true
     steps:
@@ -202,7 +245,6 @@ jobs:
 
       - name: 📦 Install Carton
         run: |
-          echo "=== Installing carton ==="
           brew install swiftwasm/tap/carton
           carton --version
 
@@ -212,49 +254,9 @@ jobs:
       - name: 🧪 Run WebAssembly Tests
         run: carton test
 
-  breaking-changes:
-    name: "💔 Breaking Changes"
-    if: github.event_name == 'pull_request'
-    runs-on: macos-26
-    steps:
-      - name: ☑️ Swift Select
-        uses: SwiftyLab/setup-swift@v1.12.0
-        with:
-          swift-version: '6.2'
-
-      - name: ⬇️ Get Sources
-        uses: actions/checkout@v5.0.0
-        with:
-          fetch-depth: 0
-
-      - name: 💔 Checking API Breaking Changes
-        run: |
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$latest_tag" ]; then
-            echo "No tags found, skipping breaking changes check"
-            exit 0
-          fi
-          echo "Latest tag: $latest_tag"
-
-          # Check for major version bump
-          tag_version="${latest_tag#v}"
-          latest_major=$(echo "$tag_version" | cut -d. -f1)
-
-          current_ref="${{ github.ref_name }}"
-          ref_version="${current_ref#v}"
-          current_major=$(echo "$ref_version" | cut -d. -f1)
-
-          if [[ "$latest_major" =~ ^[0-9]+$ ]] && [[ "$current_major" =~ ^[0-9]+$ ]]; then
-            if [ "$latest_major" != "$current_major" ]; then
-              echo "⚠️  Major version bump detected ($latest_tag -> $current_ref)"
-              echo "Skipping breaking changes check"
-              exit 0
-            fi
-          fi
-
-          echo "Checking breaking changes against $latest_tag"
-          swift package diagnose-api-breaking-changes $latest_tag
-
+  # ═══════════════════════════════════════════════════════════════
+  # ETAPA 4: Coverage Upload (só após todos os tests passarem)
+  # ═══════════════════════════════════════════════════════════════
   coverage-upload:
     name: "📤 Coverage Upload"
     runs-on: macos-26
@@ -268,13 +270,6 @@ jobs:
         uses: actions/download-artifact@v5.0.0
         with:
           path: artifacts
-
-      - name: 📁 List Downloaded Artifacts
-        run: |
-          echo "Artifacts downloaded:"
-          ls -la artifacts/
-          echo "Subdirectories:"
-          find artifacts -type d -mindepth 1 -maxdepth 1
 
       - name: ☑️ Xcode Select
         run: sudo xcode-select -switch /Applications/Xcode_26.6.app
@@ -297,27 +292,17 @@ jobs:
                     BUNDLE_NAME=$(basename "$xctest_bundle" .xctest)
                     EXECUTABLE_PATH=$(find "$xctest_bundle" -name "$BUNDLE_NAME" -type f -not -path "*/.dSYM/*" | head -n 1)
                     if [ -n "$EXECUTABLE_PATH" ] && [ -f "$EXECUTABLE_PATH" ]; then
-                      echo "Processando cobertura para: $BUNDLE_NAME"
-                      echo "Executável encontrado em: $EXECUTABLE_PATH"
                       OUTPUT_FILE="${{ github.workspace }}/${ARTIFACT_DIR_NAME}.lcov"
                       xcrun llvm-cov export "$EXECUTABLE_PATH" \
                         -format="lcov" \
                         -instr-profile="$PROFDATA_FILE" \
                         -ignore-filename-regex=".build|Tests" > "$OUTPUT_FILE"
-                      echo "Gerado: $OUTPUT_FILE"
-                    else
-                      echo "Executável não encontrado para: $BUNDLE_NAME"
                     fi
                   fi
                 done
               )
             fi
           done
-
-      - name: 📋 List Generated LCOV Files
-        run: |
-          echo "LCOV files generated:"
-          ls -la *.lcov
 
       - name: 📦 Upload to Codecov
         uses: codecov/codecov-action@v5.5.1
