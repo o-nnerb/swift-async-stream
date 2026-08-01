@@ -1,9 +1,8 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
-import Testing
-
 @_spi(Testing) @testable import SwiftAsyncStream
+import Testing
 
 /// Tracks how many tasks are inside a section at the same time.
 ///
