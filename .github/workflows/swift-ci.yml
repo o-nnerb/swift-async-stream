@@ -261,7 +261,9 @@ jobs:
           swift-version: '6.2'
 
       - name: 🕸️ Setup SwiftWasm SDK
-        uses: swiftwasm/setup-swiftwasm@v2
+        uses: swiftwasm/setup-swiftwasm@v2.1
+        with:
+          tag: "swift-6.2-RELEASE"
 
       - name: 🕸️ Build for WebAssembly
         run: swift build --swift-sdk wasm32-unknown-wasi
