@@ -266,6 +266,7 @@ jobs:
           swift-version: '6.2'
 
       - name: 🕸️ Install WebAssembly SDK
+        id: install-sdk
         run: |
           SWIFT_VERSION="6.2"
           SDK_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_wasm.artifactbundle.tar.gz"
@@ -279,21 +280,23 @@ jobs:
           echo "Checksum: $CHECKSUM"
 
           echo "Installing SDK..."
-          swift sdk install "$SDK_URL" --checksum "$CHECKSUM" || {
-            echo "Failed to install SDK for Swift $SWIFT_VERSION"
-            swift sdk list
-            exit 1
-          }
+          swift sdk install "$SDK_URL" --checksum "$CHECKSUM"
 
           rm "$SDK_FILENAME"
+
           echo "Installed SDKs:"
           swift sdk list
 
+          # Captura o ID do primeiro SDK instalado
+          SDK_ID=$(swift sdk list | grep -E "^[0-9]+\." | head -n 1 | awk '{print $1}')
+          echo "SDK_ID=$SDK_ID" >> $GITHUB_OUTPUT
+          echo "Using SDK ID: $SDK_ID"
+
       - name: 🕸️ Build for WebAssembly
-        run: swift build --swift-sdk wasm32-unknown-wasi
+        run: swift build --swift-sdk ${{ steps.install-sdk.outputs.SDK_ID }}
 
       - name: 🧪 Build Tests for WebAssembly
-        run: swift build --build-tests --swift-sdk wasm32-unknown-wasi
+        run: swift build --build-tests --swift-sdk ${{ steps.install-sdk.outputs.SDK_ID }}
 
       - name: 🏃 Install Wasmtime
         run: brew install wasmtime
@@ -301,11 +304,12 @@ jobs:
       - name: 🧪 Run WebAssembly Tests
         run: |
           PACKAGE_NAME="SwiftAsyncStream"
-          TEST_BUNDLE=".build/wasm32-unknown-wasi/debug/${PACKAGE_NAME}PackageTests.wasm"
+          TEST_BUNDLE=".build/${{ steps.install-sdk.outputs.SDK_ID }}/debug/${PACKAGE_NAME}PackageTests.wasm"
           if [ -f "$TEST_BUNDLE" ]; then
             wasmtime --dir . "$TEST_BUNDLE"
           else
             echo "Test bundle not found at $TEST_BUNDLE"
+            ls -la .build/ || true
             exit 1
           fi
 
