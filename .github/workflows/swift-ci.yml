@@ -260,16 +260,28 @@ jobs:
         with:
           swift-version: '6.2'
 
-      - name: 📦 Install Carton
-        run: |
-          brew install swiftwasm/tap/carton
-          carton --version
+      - name: 🕸️ Setup SwiftWasm SDK
+        uses: swiftwasm/setup-swiftwasm@v2
 
       - name: 🕸️ Build for WebAssembly
-        run: carton bundle
+        run: swift build --swift-sdk wasm32-unknown-wasi
+
+      - name: 🧪 Build Tests for WebAssembly
+        run: swift build --build-tests --swift-sdk wasm32-unknown-wasi
+
+      - name: 🏃 Install Wasmtime
+        run: brew install wasmtime
 
       - name: 🧪 Run WebAssembly Tests
-        run: carton test
+        run: |
+          PACKAGE_NAME="SwiftAsyncStream"
+          TEST_BUNDLE=".build/wasm32-unknown-wasi/debug/${PACKAGE_NAME}PackageTests.wasm"
+          if [ -f "$TEST_BUNDLE" ]; then
+            wasmtime --dir . "$TEST_BUNDLE"
+          else
+            echo "Test bundle not found at $TEST_BUNDLE"
+            exit 1
+          fi
 
   # ═══════════════════════════════════════════════════════════════
   # ETAPA 4: Coverage Upload (só após todos os tests passarem)
