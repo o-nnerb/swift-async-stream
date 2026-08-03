@@ -120,10 +120,9 @@ struct AsyncSignalTests {
     /// Signalling and cancelling reach the same waiter from two sides. Whichever wins, the task
     /// has to end: the failure this guards against is a continuation nobody resumes.
     ///
-    /// The iteration count is down from two hundred, which took nearly ten seconds on tvOS.
-    /// Waiting for the waiter to actually be queued is what makes each round exercise the
-    /// window, so a round is now worth much more than it was when most of them raced against a
-    /// task that had not reached the signal yet.
+    /// Waiting for the waiter to actually be queued before racing signal against cancel is what
+    /// makes every round exercise the window, rather than most of them racing a task that had
+    /// not reached the signal yet.
     @Test
     func signalAndCancelRaceNeverHangs() async throws {
         for _ in 0..<50 {
