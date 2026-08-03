@@ -115,7 +115,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   apple-tests:
     name: "🍎 Apple Tests - ${{ matrix.name }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -185,7 +185,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   third-party-tests:
     name: "🔧 Third Party - ${{ matrix.name }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -243,7 +243,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   linkage-test:
     name: "🔗 Linkage Test (FoundationEssentials)"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -340,7 +340,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   sanitizers:
     name: "🛡️ Sanitizers - ${{ matrix.sanitizer }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
