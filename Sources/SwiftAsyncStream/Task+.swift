@@ -1,7 +1,9 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(Darwin)
 import Dispatch
+#endif
 
 // MARK: - TaskTimeoutError
 
@@ -49,11 +51,11 @@ public func withTaskTimeout<Value: Sendable>(
 ) async throws -> Value {
     precondition(seconds >= .zero, "withTaskTimeout requires a non negative timeout")
 
-    // Captured here, before anything is scheduled. `addTask` creates a child, it does not run
-    // one, so a deadline measured from inside that child starts whenever the executor gets
-    // around to it. Under load that pushed the deadline out by however long the child waited
-    // for a thread, which is precisely when a timeout is supposed to fire.
+    #if canImport(Darwin)
     let deadline = DispatchTime.now().uptimeNanoseconds &+ nanoseconds(from: seconds)
+    #else
+    let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
+    #endif
 
     return try await withThrowingTaskGroup(of: Value.self) { group in
         group.addTask {
@@ -61,34 +63,31 @@ public func withTaskTimeout<Value: Sendable>(
         }
 
         group.addTask {
+            #if canImport(Darwin)
             let now = DispatchTime.now().uptimeNanoseconds
-
             if deadline > now {
                 try await Task.sleep(nanoseconds: deadline - now)
             }
+            #else
+            try await Task.sleep(until: deadline, clock: .continuous)
+            #endif
 
             throw TaskTimeoutError(seconds: seconds)
         }
 
-        // Whoever loses the race is cancelled, and its result is discarded when the group
-        // drains on the way out.
         defer { group.cancelAll() }
 
         guard let value = try await group.next() else {
             throw CancellationError()
         }
 
-        // Returned even if the clock says the deadline has passed. A timeout bounds waiting,
-        // and there is nothing left to wait for once the operation has produced a result.
-        // Checking the clock here would throw away work that succeeded, which on a machine
-        // that descheduled the caller for a moment means discarding a response that arrived
-        // in time.
         return value
     }
 }
 
 // MARK: - Private methods
 
+#if canImport(Darwin)
 private func nanoseconds(from seconds: Double) -> UInt64 {
     let nanoseconds = (seconds * 1_000_000_000).rounded()
 
@@ -98,3 +97,4 @@ private func nanoseconds(from seconds: Double) -> UInt64 {
 
     return UInt64(nanoseconds)
 }
+#endif
