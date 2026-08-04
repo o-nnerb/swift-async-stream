@@ -30,10 +30,9 @@ struct TaskTimeoutTests {
 
     /// The body can never finish, so the deadline is the only way out.
     ///
-    /// This used to race a fifty millisecond deadline against a one second sleep, which reads
-    /// as a comfortable margin and is not one: `addTask` creates a child, it does not run one,
-    /// and on a starved executor the group hands back whichever child happened to complete.
-    /// tvOS took eight seconds over this test and reported that nothing was thrown.
+    /// The competing branch must be incapable of finishing on its own, not merely slow: `addTask`
+    /// creates a child, it does not run one, and on a starved executor the group hands back
+    /// whichever child happened to complete first. A sleep is not a safe stand-in for "never".
     @Test
     func throwsATaskTimeoutErrorWhenTheDeadlinePasses() async throws {
         let neverSignalled = AsyncSignal()

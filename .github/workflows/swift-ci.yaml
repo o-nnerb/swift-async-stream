@@ -17,8 +17,11 @@ on:
       - '.swift-format'
       - '.github/workflows/swift-ci.yml'
 
+# Cancel any in-progress or queued run for the same repo + ref when a new
+# run is triggered (e.g. new push), so stale xcodebuild/swift test
+# processes don't keep running and don't sit blocking the queue.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -115,7 +118,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   apple-tests:
     name: "🍎 Apple Tests - ${{ matrix.name }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -185,7 +188,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   third-party-tests:
     name: "🔧 Third Party - ${{ matrix.name }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -243,7 +246,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   linkage-test:
     name: "🔗 Linkage Test (FoundationEssentials)"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
@@ -340,7 +343,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   sanitizers:
     name: "🛡️ Sanitizers - ${{ matrix.sanitizer }}"
-    needs: breaking-changes
+    needs: [format-check, breaking-changes]
     if: |
       always() &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')

@@ -131,11 +131,11 @@ struct ContinuationLeakStressTests {
         }
     }
 
-    /// The original defect, at scale. A waiter cancelled while queued used to have its
-    /// continuation thrown away, so its task never returned and never reported anything.
+    /// `AsyncSignal` waiting is cancellable, so a cancelled waiter must still resolve its
+    /// continuation rather than have it thrown away with the task left never returning.
     ///
     /// Cancelling half of them while the other half is released by the signal puts both
-    /// endings in flight at once, which is the interleaving that used to lose one.
+    /// endings in flight at once, which is the interleaving that stresses that guarantee.
     @Test
     func asyncSignalLosesNoWaiterWhenHalfAreCancelled() async throws {
         for _ in 0..<Self.rounds {
