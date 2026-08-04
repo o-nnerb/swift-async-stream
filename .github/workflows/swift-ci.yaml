@@ -15,7 +15,7 @@ on:
       - 'Sources/**'
       - 'Tests/**'
       - '.swift-format'
-      - '.github/workflows/swift-ci.yml'
+      - '.github/workflows/swift-ci.yaml'
 
 # Cancel any in-progress or queued run for the same repo + ref when a new
 # run is triggered (e.g. new push), so stale xcodebuild/swift test
@@ -121,6 +121,7 @@ jobs:
     needs: [format-check, breaking-changes]
     if: |
       always() &&
+      (needs.format-check.result == 'success' || needs.format-check.result == 'skipped') &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     strategy:
       fail-fast: false
@@ -191,6 +192,7 @@ jobs:
     needs: [format-check, breaking-changes]
     if: |
       always() &&
+      (needs.format-check.result == 'success' || needs.format-check.result == 'skipped') &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     strategy:
       fail-fast: false
@@ -249,6 +251,7 @@ jobs:
     needs: [format-check, breaking-changes]
     if: |
       always() &&
+      (needs.format-check.result == 'success' || needs.format-check.result == 'skipped') &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -346,6 +349,7 @@ jobs:
     needs: [format-check, breaking-changes]
     if: |
       always() &&
+      (needs.format-check.result == 'success' || needs.format-check.result == 'skipped') &&
       (needs.breaking-changes.result == 'success' || needs.breaking-changes.result == 'skipped')
     strategy:
       fail-fast: false
