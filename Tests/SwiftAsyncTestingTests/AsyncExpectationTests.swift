@@ -81,6 +81,7 @@ struct AsyncExpectationTests {
     /// elapsed time instead avoids piling on more competing tasks, and a generous bound is
     /// enough to tell "resolved via the signal" apart from "resolved via the 60 second
     /// timeout" without being sensitive to scheduler noise.
+    @available(iOS 16, tvOS 16, macOS 13, watchOS 9, *)
     @Test
     func fulfillingAnInvertedExpectationFailsAndReturnsImmediately() async throws {
         let expectation = AsyncExpectation()
