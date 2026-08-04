@@ -73,6 +73,14 @@ struct AsyncExpectationTests {
     /// The bug this guards against: fulfilling an inverted expectation only recorded the
     /// failure, it never released the wait, so the suite paid the full timeout even though
     /// the outcome was already known.
+    ///
+    /// Racing this against a `withTaskTimeout` deadline would repeat the exact mistake
+    /// `TaskTimeoutTests` warns about: a tight deadline over a body that finishes on its own
+    /// is a race against the scheduler, and `expectations` already nests its own
+    /// `withTaskTimeout` per expectation, adding scheduling overhead on top. Measuring the
+    /// elapsed time instead avoids piling on more competing tasks, and a generous bound is
+    /// enough to tell "resolved via the signal" apart from "resolved via the 60 second
+    /// timeout" without being sensitive to scheduler noise.
     @Test
     func fulfillingAnInvertedExpectationFailsAndReturnsImmediately() async throws {
         let expectation = AsyncExpectation()
@@ -82,9 +90,11 @@ struct AsyncExpectationTests {
             expectation.fulfill()
         }
 
-        try await withTaskTimeout(seconds: 1) {
+        let elapsed = try await ContinuousClock().measure {
             try await expectations([expectation], timeout: 60)
         }
+
+        #expect(elapsed < .seconds(30))
     }
 
     @Test
