@@ -355,7 +355,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: ⬇️ Get Sources
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: 🍺 Homebrew Dependencies
         run: brew install xcbeautify
