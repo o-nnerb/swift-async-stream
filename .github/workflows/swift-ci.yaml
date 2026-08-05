@@ -164,13 +164,156 @@ jobs:
             -scheme "SwiftAsyncStream-Package" \
             -destination "${{ matrix.destination }}" \
             -enableCodeCoverage YES \
-            -derivedDataPath .xcbuild 2>&1 | xcbeautify --renderer github-actions
+            -derivedDataPath .xcbuild 2>&1 | tee raw-test-output.log | xcbeautify --renderer github-actions
 
-      - name: 🔀 Move Coverage Files
+      - name: 🚨 Identify Test Running at Crash Time
+        if: failure()
+        run: |
+          python3 - << 'PYEOF'
+          import re
+
+          # xcbeautify's pretty output doesn't survive a hard crash (e.g. a
+          # `Fatal error` trap) cleanly, making it impossible to tell which
+          # test/suite was in flight. The raw xcodebuild log captured above
+          # still has every "started"/"passed"/"failed" line, so diff those
+          # to find whatever never got a matching completion line — that's
+          # the test that was running when the process died.
+          START_RE = re.compile(r"(Test Suite|Test Case|Suite|Test)\s+['\"](.+?)['\"]\s+started")
+          END_RE = re.compile(r"(Test Suite|Test Case|Suite|Test)\s+['\"](.+?)['\"]\s+(passed|failed|skipped)")
+
+          started = {}
+          with open("raw-test-output.log") as f:
+              for line in f:
+                  m = START_RE.search(line)
+                  if m:
+                      started[(m.group(1), m.group(2))] = True
+                      continue
+                  m = END_RE.search(line)
+                  if m:
+                      started.pop((m.group(1), m.group(2)), None)
+
+          in_flight = [name for (_, name) in started]
+          if in_flight:
+              print(f"::error::Test(s) still running when the job crashed: {', '.join(in_flight)}")
+          else:
+              print("No in-flight test could be identified from the raw log "
+                    "(crash may have happened outside a test, or the log format didn't match).")
+          PYEOF
+
+      - name: 📤 Upload Raw Test Log
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: raw-test-log-${{ matrix.name }}
+          path: raw-test-output.log
+
+      - name: 🔀 Extract Coverage Report
         run: |
           mkdir -p coverage-artifacts
-          find .xcbuild -name "*.profdata" -exec cp {} coverage-artifacts/ \; 2>/dev/null || true
-          find .xcbuild -name "*.xctest" -not -path "*/.dSYM/*" -exec cp -r {} coverage-artifacts/ \; 2>/dev/null || true
+          XCRESULT_PATH=$(find .xcbuild -name "*.xcresult" -type d | head -n 1)
+          if [ -z "$XCRESULT_PATH" ]; then
+            echo "❌ No .xcresult found under .xcbuild"
+            exit 1
+          fi
+          echo "Using xcresult: $XCRESULT_PATH"
+          # Since Xcode 26, coverage data usually doesn't need a loose
+          # .profdata under derived data (.xcbuild); `xccov` can read
+          # per-line coverage directly from the .xcresult bundle instead.
+          # This is the preferred path when it works.
+          #
+          # `xccov view --archive` stages its work at a fixed path,
+          # /tmp/action.xccovarchive — not under $TMPDIR, and not a
+          # per-invocation random one. Setting TMPDIR before the command has
+          # no effect on this (confirmed locally: xccov ignores it entirely,
+          # and doesn't even touch a pre-existing /tmp/action.xccovarchive
+          # when $TMPDIR points elsewhere). On this job's runner, xccov
+          # reliably resolves to the literal /tmp, so a leftover/partial
+          # /tmp/action.xccovarchive from an earlier failed attempt *in this
+          # same job* can make a subsequent attempt fail with
+          # "Metadata.plist ... No such file or directory" even though the
+          # .xcresult itself is fine. Clear that fixed path before each
+          # attempt and retry once.
+          #
+          # xccov has also been observed to fail outright — independent of
+          # /tmp state — on destinations where the .xcresult's test action
+          # has no title ("scheme action '(null)'" in the xccov error),
+          # which so far has only been seen on native macOS / Mac Catalyst
+          # destinations. `xccov view --archive <xcresult>` resolves "the"
+          # coverage archive inside the bundle by matching that title, so a
+          # null title breaks the lookup even though the underlying coverage
+          # data is present and intact.
+          extract_coverage() {
+            rm -rf /tmp/action.xccovarchive
+            xcrun xccov view --archive "$XCRESULT_PATH" > coverage-artifacts/coverage.xccov
+          }
+
+          if ! extract_coverage; then
+            echo "⚠️  xccov extraction failed, retrying after clearing /tmp/action.xccovarchive..."
+            if ! extract_coverage; then
+              echo "⚠️  xcrun xccov view --archive failed after retry — will try the xcresulttool export fallback"
+            fi
+          fi
+
+          # When the title-based lookup above fails, sidestep it by having
+          # `xcresulttool export coverage` walk the result bundle's object
+          # graph directly (no title matching) and write the raw
+          # "*_CoverageArchive" directory straight to disk. `xccov view
+          # --archive` dispatches on file extension rather than sniffing
+          # contents, so the exported directory has to be renamed to end in
+          # .xccovarchive before xccov will accept it.
+          if [ ! -s coverage-artifacts/coverage.xccov ]; then
+            rm -f coverage-artifacts/coverage.xccov
+            rm -rf /tmp/xcresult-export
+            if xcrun xcresulttool export coverage --path "$XCRESULT_PATH" --output-path /tmp/xcresult-export; then
+              EXPORTED_ARCHIVE=$(find /tmp/xcresult-export -mindepth 1 -maxdepth 1 -name "*_CoverageArchive" -type d | head -n 1)
+              if [ -n "$EXPORTED_ARCHIVE" ]; then
+                RENAMED_ARCHIVE="/tmp/xcresult-export/exported.xccovarchive"
+                mv "$EXPORTED_ARCHIVE" "$RENAMED_ARCHIVE"
+                if xcrun xccov view --archive "$RENAMED_ARCHIVE" > coverage-artifacts/coverage.xccov; then
+                  echo "✅ Extracted coverage via the xcresulttool export fallback"
+                else
+                  echo "⚠️  xccov also failed against the exported .xccovarchive — will try the .profdata fallback"
+                  rm -f coverage-artifacts/coverage.xccov
+                fi
+              else
+                echo "⚠️  xcresulttool export coverage produced no *_CoverageArchive directory — will try the .profdata fallback"
+              fi
+            else
+              echo "⚠️  xcrun xcresulttool export coverage failed — will try the .profdata fallback"
+            fi
+          fi
+
+          # Last-resort fallback: the same .profdata + .xctest artifacts that
+          # third-party-tests uploads for Linux — Coverage Upload already
+          # knows how to convert that format (see the 📁 Process Coverage for
+          # Each Destination step below), so no downstream change is needed
+          # for the fallback to be picked up.
+          if [ ! -s coverage-artifacts/coverage.xccov ]; then
+            rm -f coverage-artifacts/coverage.xccov
+            PROFDATA_FILE=$(find .xcbuild -name "*.profdata" | head -n 1)
+            if [ -n "$PROFDATA_FILE" ]; then
+              echo "⚠️  Falling back to raw .profdata: $PROFDATA_FILE"
+              cp "$PROFDATA_FILE" coverage-artifacts/
+              find .xcbuild -name "*.xctest" -type d -exec cp -r {} coverage-artifacts/ \;
+            fi
+          fi
+
+          # This used to `exit 1` here, but by this point the tests
+          # themselves have already passed — only the coverage tooling
+          # failed. All 3 plausible extraction paths (xccov's title-based
+          # lookup, xcresulttool's object-graph export, and the raw
+          # .profdata) can fail together on an intermittent Xcode 26
+          # platform bug where the coverage archive object simply isn't
+          # materialized for some test actions (content-availability still
+          # reports hasCoverage: true, but nothing can extract it). Failing
+          # the whole job — including its test results — for a
+          # coverage-tooling bug outside our control isn't the right
+          # tradeoff, so warn instead and let the job reflect the real test
+          # outcome. Coverage Upload is expected to have gaps for this
+          # destination when that happens.
+          if [ -z "$(find coverage-artifacts -type f -print -quit)" ]; then
+            echo "::warning::coverage-artifacts/ is empty for ${{ matrix.name }} — xccov, the xcresulttool export fallback, and the .profdata fallback all produced no data. Tests passed; only coverage extraction failed (likely an intermittent Xcode platform bug). Coverage Upload will be missing this destination."
+          fi
 
       - name: 📤 Upload Coverage Data
         uses: actions/upload-artifact@v7.0.1
@@ -415,38 +558,123 @@ jobs:
         with:
           path: artifacts
 
+      - name: 📁 List Downloaded Artifacts
+        run: |
+          echo "Artifacts downloaded:"
+          ls -la artifacts/
+          find artifacts -type d -mindepth 1 -maxdepth 1
+
+      - name: 🔍 Verify Apple Coverage Completeness
+        run: |
+          # apple-tests uploads one apple-<name> coverage artifact per
+          # matrix leg, but a leg can fail to produce one (e.g. the
+          # intermittent Xcode coverage bug that the 🔀 Extract Coverage
+          # Report step warns about instead of failing) without that being
+          # visible here — this job just processes whatever apple-*/ dirs
+          # exist. Compare against the matrix's expected platform list so a
+          # missing destination shows up as a warning instead of silently
+          # reporting fewer coverage numbers to Codecov.
+          EXPECTED_PLATFORMS=("iOS" "iPadOS" "watchOS" "tvOS" "visionOS" "macOS" "macOS Catalyst")
+          MISSING=()
+          for platform in "${EXPECTED_PLATFORMS[@]}"; do
+            if [ ! -d "artifacts/apple-${platform}" ]; then
+              MISSING+=("$platform")
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::Missing apple-tests coverage artifact(s) for: ${MISSING[*]} — that destination's apple-tests leg likely failed to extract coverage or didn't run. Codecov numbers for those destinations will be incomplete this run."
+          else
+            echo "✅ All expected apple-tests coverage artifacts present: ${EXPECTED_PLATFORMS[*]}"
+          fi
+
       - name: ☑️ Xcode Select
         run: sudo xcode-select -switch /Applications/Xcode_26.6.app
 
+      - name: 🛠️ Write xccov-to-lcov Converter
+        run: |
+          cat > /tmp/xccov_to_lcov.py << 'PYEOF'
+          import re
+          import sys
+
+          HEADER_RE = re.compile(r'^(.+):$')
+          DATA_RE = re.compile(r'^(\d+): (\*|\d+)$')
+
+
+          def convert(input_path, output_path):
+              current_file = None
+              lines_buffer = []
+
+              def flush(out):
+                  if current_file is None:
+                      return
+                  out.write(f"SF:{current_file}\n")
+                  for line_no, count in lines_buffer:
+                      out.write(f"DA:{line_no},{count}\n")
+                  out.write("end_of_record\n")
+
+              with open(input_path) as f, open(output_path, "w") as out:
+                  for raw_line in f:
+                      line = raw_line.rstrip("\n")
+                      if not line:
+                          continue
+                      data_match = DATA_RE.match(line)
+                      if data_match:
+                          if data_match.group(2) != "*":
+                              lines_buffer.append((int(data_match.group(1)), int(data_match.group(2))))
+                          continue
+                      header_match = HEADER_RE.match(line)
+                      if header_match:
+                          flush(out)
+                          current_file = header_match.group(1)
+                          lines_buffer = []
+                  flush(out)
+
+
+          if __name__ == "__main__":
+              convert(sys.argv[1], sys.argv[2])
+          PYEOF
+
       - name: 📁 Process Coverage for Each Destination
         run: |
-          for artifact_dir in artifacts/*/; do
+          for artifact_dir in artifacts/apple-*/ artifacts/third-party-*/; do
             if [ -d "$artifact_dir" ]; then
               echo "=== Processing: $artifact_dir ==="
               (
                 cd "$artifact_dir"
                 ARTIFACT_DIR_NAME=$(basename "$artifact_dir")
-                PROFDATA_FILE=$(find . -name "*.profdata" | head -n 1)
-                if [ -z "$PROFDATA_FILE" ]; then
-                  echo "Nenhum arquivo .profdata encontrado em $artifact_dir"
-                  exit 1
-                fi
-                find . -name "*.xctest" -type d | while read -r xctest_bundle; do
-                  if [ -n "$xctest_bundle" ]; then
-                    BUNDLE_NAME=$(basename "$xctest_bundle" .xctest)
-                    EXECUTABLE_PATH=$(find "$xctest_bundle" -name "$BUNDLE_NAME" -type f -not -path "*/.dSYM/*" | head -n 1)
-                    if [ -n "$EXECUTABLE_PATH" ] && [ -f "$EXECUTABLE_PATH" ]; then
-                      OUTPUT_FILE="${{ github.workspace }}/${ARTIFACT_DIR_NAME}.lcov"
-                      xcrun llvm-cov export "$EXECUTABLE_PATH" \
-                        -format="lcov" \
-                        -instr-profile="$PROFDATA_FILE" \
-                        -ignore-filename-regex=".build|Tests" > "$OUTPUT_FILE"
-                    fi
+                OUTPUT_FILE="${{ github.workspace }}/${ARTIFACT_DIR_NAME}.lcov"
+
+                if [ -f "coverage.xccov" ]; then
+                  # Artifact from the 🍎 job (Xcode 26+): per-line coverage
+                  # extracted from the .xcresult via `xccov view --archive`.
+                  python3 /tmp/xccov_to_lcov.py coverage.xccov "$OUTPUT_FILE"
+                  echo "Generated: $OUTPUT_FILE"
+                else
+                  PROFDATA_FILE=$(find . -name "*.profdata" | head -n 1)
+                  if [ -z "$PROFDATA_FILE" ]; then
+                    echo "No coverage.xccov or .profdata found in $artifact_dir"
+                    exit 1
                   fi
-                done
+                  find . -name "*.xctest" -type d | while read -r xctest_bundle; do
+                    if [ -n "$xctest_bundle" ]; then
+                      BUNDLE_NAME=$(basename "$xctest_bundle" .xctest)
+                      EXECUTABLE_PATH=$(find "$xctest_bundle" -name "$BUNDLE_NAME" -type f -not -path "*/.dSYM/*" | head -n 1)
+                      if [ -n "$EXECUTABLE_PATH" ] && [ -f "$EXECUTABLE_PATH" ]; then
+                        xcrun llvm-cov export "$EXECUTABLE_PATH" \
+                          -format="lcov" \
+                          -instr-profile="$PROFDATA_FILE" \
+                          -ignore-filename-regex=".build|Tests" > "$OUTPUT_FILE"
+                        echo "Generated: $OUTPUT_FILE"
+                      fi
+                    fi
+                  done
+                fi
               )
             fi
           done
+
+      - name: 📋 List Generated LCOV Files
+        run: ls -la *.lcov
 
       - name: 📦 Upload to Codecov
         uses: codecov/codecov-action@v7.0.0
