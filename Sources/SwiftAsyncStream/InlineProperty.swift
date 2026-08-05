@@ -86,3 +86,21 @@ public struct InlineProperty<Value> {
 // `@unchecked Sendable`, would let a non-Sendable value cross an isolation boundary with the
 // compiler's approval.
 extension InlineProperty: Sendable where Value: Sendable {}
+
+// MARK: - Equatable
+
+extension InlineProperty: Equatable where Value: Equatable {
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.wrappedValue == rhs.wrappedValue
+    }
+}
+
+// MARK: - Hashable
+
+extension InlineProperty: Hashable where Value: Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(wrappedValue)
+    }
+}
