@@ -23,19 +23,23 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "SwiftAsyncStream"
+            name: "SwiftAsyncStream",
+            swiftSettings: [.defaultIsolation(nil)]
         ),
         .target(
             name: "SwiftAsyncTesting",
-            dependencies: ["SwiftAsyncStream"]
+            dependencies: ["SwiftAsyncStream"],
+            swiftSettings: [.defaultIsolation(nil)]
         ),
         .testTarget(
             name: "SwiftAsyncStreamTests",
-            dependencies: ["SwiftAsyncStream", "SwiftAsyncTesting"]
+            dependencies: ["SwiftAsyncStream", "SwiftAsyncTesting"],
+            swiftSettings: [.defaultIsolation(nil)]
         ),
         .testTarget(
             name: "SwiftAsyncTestingTests",
-            dependencies: ["SwiftAsyncTesting"]
+            dependencies: ["SwiftAsyncTesting"],
+            swiftSettings: [.defaultIsolation(nil)]
         ),
     ],
     swiftLanguageModes: [.v6]
