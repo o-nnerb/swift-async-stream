@@ -246,7 +246,13 @@ extension SerialCoalescingQueue {
 
         isRunning = true
 
-        drainTask = Task { await self.drain() }
+        // Detached rather than plain `Task`: the drain loop runs batches from
+        // callers unrelated to whichever caller happened to trigger this
+        // transition, so it must not inherit that caller's task locals.
+        // Priority is captured explicitly to keep the same propagation a
+        // plain `Task` would have given for free.
+        let priority = Task.currentPriority
+        drainTask = Task.detached(priority: priority) { await self.drain() }
     }
 
     fileprivate func drain() async {
