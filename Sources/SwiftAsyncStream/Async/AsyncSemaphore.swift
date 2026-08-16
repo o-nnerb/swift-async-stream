@@ -160,6 +160,8 @@ public final class AsyncSemaphore: Sendable {
 
 extension AsyncSemaphore: CustomDebugStringConvertible {
 
+    /// A snapshot of the semaphore, naming how many permits are available and the call sites
+    /// waiting for one.
     public var debugDescription: String {
         let (permits, pending) = lock.withLock {
             (_storage.permits, _storage.pendingOperations.elements)

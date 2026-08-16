@@ -226,6 +226,12 @@ public final class AsyncLock: Sendable {
 
 extension AsyncLock: CustomDebugStringConvertible {
 
+    /// A snapshot of the lock, naming the call site holding it and the call sites waiting
+    /// behind it. A repeat of the same call site in both the holder and the queue is
+    /// reentrancy.
+    ///
+    /// This is what a ``Watchdog`` report carries when a critical section outstays its
+    /// deadline.
     public var debugDescription: String {
         let (running, pending) = lock.withLock {
             (_storage.runningOperation, _storage.pendingOperations.elements)
