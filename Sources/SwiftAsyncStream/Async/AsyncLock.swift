@@ -85,6 +85,9 @@ public final class AsyncLock: Sendable {
 
     /// Executes the provided closure while maintaining the lock.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for watchdog reports.
+    /// - Parameter file: The caller's file, captured for watchdog reports.
+    /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
     /// - Returns: The result of the closure.
     public func withLock<Value: Sendable, Failure: Error>(
@@ -102,6 +105,9 @@ public final class AsyncLock: Sendable {
 
     /// Executes the provided closure while maintaining the lock, without returning a value.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for watchdog reports.
+    /// - Parameter file: The caller's file, captured for watchdog reports.
+    /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
     public func withLockVoid<Failure: Error>(
         isolation: isolated (any Actor)? = #isolation,

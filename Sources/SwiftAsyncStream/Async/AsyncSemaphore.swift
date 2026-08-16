@@ -70,6 +70,9 @@ public final class AsyncSemaphore: Sendable {
 
     /// Executes the provided closure while holding a permit.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for ``debugDescription``.
+    /// - Parameter file: The caller's file, captured for ``debugDescription``.
+    /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Parameter block: The closure to execute while holding the permit.
     /// - Returns: The result of the closure.
     public func withPermit<Value: Sendable, Failure: Error>(
@@ -87,6 +90,9 @@ public final class AsyncSemaphore: Sendable {
 
     /// Executes the provided closure while holding a permit, without returning a value.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for ``debugDescription``.
+    /// - Parameter file: The caller's file, captured for ``debugDescription``.
+    /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Parameter block: The closure to execute while holding the permit.
     public func withPermitVoid<Failure: Error>(
         isolation: isolated (any Actor)? = #isolation,
