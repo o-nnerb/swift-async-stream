@@ -85,6 +85,9 @@ public final class AsyncLock: Sendable {
 
     /// Executes the provided closure while maintaining the lock.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for watchdog reports.
+    /// - Parameter file: The caller's file, captured for watchdog reports.
+    /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
     /// - Returns: The result of the closure.
     public func withLock<Value: Sendable, Failure: Error>(
@@ -102,6 +105,9 @@ public final class AsyncLock: Sendable {
 
     /// Executes the provided closure while maintaining the lock, without returning a value.
     /// - Parameter isolation: The isolated execution `Actor`.
+    /// - Parameter function: The caller's function name, captured for watchdog reports.
+    /// - Parameter file: The caller's file, captured for watchdog reports.
+    /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
     public func withLockVoid<Failure: Error>(
         isolation: isolated (any Actor)? = #isolation,
@@ -220,6 +226,12 @@ public final class AsyncLock: Sendable {
 
 extension AsyncLock: CustomDebugStringConvertible {
 
+    /// A snapshot of the lock, naming the call site holding it and the call sites waiting
+    /// behind it. A repeat of the same call site in both the holder and the queue is
+    /// reentrancy.
+    ///
+    /// This is what a ``Watchdog`` report carries when a critical section outstays its
+    /// deadline.
     public var debugDescription: String {
         let (running, pending) = lock.withLock {
             (_storage.runningOperation, _storage.pendingOperations.elements)
