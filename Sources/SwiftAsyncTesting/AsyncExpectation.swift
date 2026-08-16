@@ -1,4 +1,12 @@
 @_exported import SwiftAsyncStream
+
+// Not every Swift SDK ships a Testing module — the official static Android SDK
+// bundle, for one, only carries production-oriented modules (Foundation,
+// Dispatch, Observation, ...) and omits Testing/XCTest entirely from its
+// swift_static-*/android resource directory. This target only has meaning in
+// a test context, so it degrades to an empty module rather than breaking the
+// build for platforms without Testing.
+#if canImport(Testing)
 import Testing
 
 #if canImport(Darwin)
@@ -268,3 +276,5 @@ public func expectations(_ expectations: [AsyncExpectation], timeout: Double = 6
         try await group.waitForAll()
     }
 }
+
+#endif
