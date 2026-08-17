@@ -252,7 +252,7 @@ extension SerialCoalescingQueue {
         // Priority is captured explicitly to keep the same propagation a
         // plain `Task` would have given for free.
         let priority = Task.currentPriority
-        drainTask = Task.detached(priority: priority) { await self.drain() }
+        drainTask = Task.detachedUnlessDisabled(priority: priority) { await self.drain() }
     }
 
     fileprivate func drain() async {

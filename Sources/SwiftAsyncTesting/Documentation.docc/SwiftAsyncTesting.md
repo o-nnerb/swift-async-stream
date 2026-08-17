@@ -60,6 +60,26 @@ try await expectations([expectation], timeout: 0.2)
 One that is never fulfilled can only be confirmed by waiting the timeout out, so pass a short
 explicit timeout instead of relying on the 60 second default.
 
+### Detaching background tasks
+
+`SwiftAsyncStream` spawns a few internal tasks with `Task.detached` — `SerialCoalescingQueue`'s
+drain loop, `AsyncLock`'s watchdog — specifically so they do not inherit whichever caller
+triggered them. That is correct in production, but it also makes those tasks invisible to
+task-local-based test infrastructure such as leak trackers or expectations. Apply
+``TaskDetachmentDisabledTrait`` to route them through a plain, attached `Task` instead, for a
+single test or for a whole suite:
+
+```swift
+@Suite(.taskDetachmentDisabled)
+struct MyTests {
+
+    @Test
+    func backgroundWorkSeesTheCallersTaskLocals() async throws {
+        // ...
+    }
+}
+```
+
 ## Topics
 
 ### Expectations
@@ -70,3 +90,7 @@ explicit timeout instead of relying on the 60 second default.
 ### Errors
 
 - ``AsyncExpectationTimeout``
+
+### Traits
+
+- ``TaskDetachmentDisabledTrait``

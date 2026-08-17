@@ -161,8 +161,10 @@ func publishesEveryValue() async throws {
 }
 ```
 
-Inverted expectations, and `@_spi(Testing)` hooks for deterministic queue shapes in `AsyncLock`,
-`AsyncSemaphore` and `SerialCoalescingQueue`, are covered in the hosted documentation.
+Inverted expectations, `.taskDetachmentDisabled` for attaching `SerialCoalescingQueue` and
+`AsyncLock`'s internal background tasks to a test's task tree, and `@_spi(Testing)` hooks for
+deterministic queue shapes in `AsyncLock`, `AsyncSemaphore` and `SerialCoalescingQueue`, are
+covered in the hosted documentation.
 
 ---
 

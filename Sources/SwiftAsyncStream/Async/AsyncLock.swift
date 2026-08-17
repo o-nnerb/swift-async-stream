@@ -187,7 +187,7 @@ public final class AsyncLock: Sendable {
 
         let nanoseconds = UInt64(watchdog.seconds * 1_000_000_000)
 
-        Task.detached { [weak self] in
+        Task.detachedUnlessDisabled { [weak self] in
             try? await Task.sleep(nanoseconds: nanoseconds)
 
             guard let self, self.isHolding(operation) else {
