@@ -18,15 +18,29 @@ public enum TaskDetachment {
 
 // MARK: - Task
 
-extension Task where Failure == Never {
+extension Task {
 
     /// Detaches, unless ``TaskDetachment/isDisabled`` is set, in which case it spawns a plain
     /// `Task` that inherits the caller's priority and task locals instead.
     @discardableResult
-    static func detachedUnlessDisabled(
+    public static func detachedUnlessDisabled(
         priority: TaskPriority? = nil,
         operation: @escaping @Sendable () async -> Success
-    ) -> Task<Success, Never> {
+    ) -> Task<Success, Failure> where Failure == Never {
+        if TaskDetachment.isDisabled {
+            Task(priority: priority, operation: operation)
+        } else {
+            Task.detached(priority: priority, operation: operation)
+        }
+    }
+
+    /// Detaches, unless ``TaskDetachment/isDisabled`` is set, in which case it spawns a plain
+    /// `Task` that inherits the caller's priority and task locals instead.
+    @discardableResult
+    public static func detachedUnlessDisabled(
+        priority: TaskPriority? = nil,
+        operation: @escaping @Sendable () async throws -> Success
+    ) -> Task<Success, Failure> where Failure == any Error {
         if TaskDetachment.isDisabled {
             Task(priority: priority, operation: operation)
         } else {
