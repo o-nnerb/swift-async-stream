@@ -29,7 +29,13 @@ let package = Package(
         .target(
             name: "SwiftAsyncTesting",
             dependencies: ["SwiftAsyncStream"],
-            swiftSettings: [.defaultIsolation(nil)]
+            swiftSettings: [.defaultIsolation(nil)],
+            linkerSettings: [
+                // Declared explicitly because consumers that generate their Xcode
+                // project from Package.swift (e.g. Tuist) don't get the implicit
+                // XCTest linkage that plain `swift build`/Xcode provide.
+                .linkedFramework("XCTest", .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS]))
+            ]
         ),
         .testTarget(
             name: "SwiftAsyncStreamTests",

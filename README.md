@@ -133,6 +133,8 @@ subject.send(42)
 - `withTaskTimeout` runs an operation under a structured deadline.
 - `SerialCoalescingQueue` collapses concurrent identical submissions into one execution.
 - `FIFOQueue` is the amortized O(1) queue every primitive above uses for its waiters.
+- `Task.detachedUnlessDisabled` is a drop-in for `Task.detached` that a test can opt back into
+  the caller's task tree via `.taskDetachmentDisabled`, see [below](#testing).
 
 ## Testing
 
@@ -161,10 +163,11 @@ func publishesEveryValue() async throws {
 }
 ```
 
-Inverted expectations, `.taskDetachmentDisabled` for attaching `SerialCoalescingQueue` and
-`AsyncLock`'s internal background tasks to a test's task tree, and `@_spi(Testing)` hooks for
-deterministic queue shapes in `AsyncLock`, `AsyncSemaphore` and `SerialCoalescingQueue`, are
-covered in the hosted documentation.
+Inverted expectations, `.taskDetachmentDisabled` for attaching background tasks spawned through
+`Task.detachedUnlessDisabled` — `SerialCoalescingQueue`'s and `AsyncLock`'s internal ones, and
+your own — to a test's task tree, and `@_spi(Testing)` hooks for deterministic queue shapes in
+`AsyncLock`, `AsyncSemaphore` and `SerialCoalescingQueue`, are covered in the hosted
+documentation.
 
 ---
 

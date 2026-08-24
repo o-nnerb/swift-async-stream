@@ -31,6 +31,7 @@ concurrency:
 jobs:
   ci:
     name: "Swift CI"
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     uses: request-dl/.github/.github/workflows/swift-ci.yaml@main
     with:
       name: SwiftAsyncStream
@@ -76,6 +77,7 @@ jobs:
     needs: ci
     if: |
       always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (needs.ci.result == 'success' || needs.ci.result == 'skipped')
     strategy:
       fail-fast: false
