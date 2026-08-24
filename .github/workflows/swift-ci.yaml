@@ -35,12 +35,12 @@ jobs:
     with:
       name: SwiftAsyncStream
       product-name: SwiftAsyncStream
-      swift-version: '6.2'
+      swift-version: '6.4'
       platform: macos-26
 
       # Step 1
       enable-format: true
-      format-swift-version: '6.3'
+      format-swift-version: '6.4'
 
       # Step 2
       enable-breaking-changes: true
@@ -50,7 +50,7 @@ jobs:
       # Step 3 – Apple
       enable-apple-tests: true
       package-name: "SwiftAsyncStream-Package"
-      xcode-version: '26.6'
+      xcode-version: '27.0'
       apple-coverage-enabled: true
 
       # Step 3 – Third Party
@@ -91,7 +91,7 @@ jobs:
         run: brew install xcbeautify
 
       - name: ☑️ Xcode Select
-        run: sudo xcode-select -switch /Applications/Xcode_26.6.app
+        run: sudo xcode-select -switch /Applications/Xcode_27.0.app
 
       - name: ⚒️ Build with Sanitizer
         env:
