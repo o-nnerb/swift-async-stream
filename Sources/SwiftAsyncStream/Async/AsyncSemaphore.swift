@@ -118,7 +118,7 @@ public final class AsyncSemaphore: Sendable {
             debugInfo: .init(function: function, file: file, line: line)
         )
 
-        await withUnsafeContinuation(isolation: isolation) { continuation in
+        await withUnsafeContinuation { continuation in
             let acquired = lock.withLock { () -> UnsafeContinuation<Void, Never>? in
                 operation.schedule(continuation)
 

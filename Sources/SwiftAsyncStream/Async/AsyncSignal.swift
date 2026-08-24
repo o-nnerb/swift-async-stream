@@ -83,7 +83,7 @@ public final class AsyncSignal: Sendable {
 
         await withTaskCancellationHandler(
             operation: {
-                await withUnsafeContinuation(isolation: isolation) { continuation in
+                await withUnsafeContinuation { continuation in
                     let resumable = locker.withLock { () -> UnsafeContinuation<Void, Never>? in
                         guard operation.schedule(continuation) else {
                             // Cancelled before it could be scheduled. Resume right away so the

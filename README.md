@@ -26,7 +26,7 @@ in the same archive; switch between the two from the sidebar.
 
 | | |
 |---|---|
-| Swift | 6.2 |
+| Swift | 6.4 |
 | Language mode | 6 |
 | Platforms | iOS 15, macOS 12, tvOS 15, watchOS 8, Linux, Windows |
 | Dependencies | none, not even Foundation |
