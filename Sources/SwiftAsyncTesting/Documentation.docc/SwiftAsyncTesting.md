@@ -62,12 +62,13 @@ explicit timeout instead of relying on the 60 second default.
 
 ### Detaching background tasks
 
-`SwiftAsyncStream` spawns a few internal tasks with `Task.detached` — `SerialCoalescingQueue`'s
-drain loop, `AsyncLock`'s watchdog — specifically so they do not inherit whichever caller
-triggered them. That is correct in production, but it also makes those tasks invisible to
-task-local-based test infrastructure such as leak trackers or expectations. Apply
-``TaskDetachmentDisabledTrait`` to route them through a plain, attached `Task` instead, for a
-single test or for a whole suite:
+`SwiftAsyncStream` spawns a few internal tasks through `Task.detachedUnlessDisabled` —
+`SerialCoalescingQueue`'s drain loop, `AsyncLock`'s watchdog — specifically so they do not
+inherit whichever caller triggered them. That is correct in production, but it also makes those
+tasks invisible to task-local-based test infrastructure such as leak trackers or expectations.
+The same applies to any `Task.detachedUnlessDisabled` call your own code makes, since it is a
+public API. Apply ``TaskDetachmentDisabledTrait`` to route them through a plain, attached `Task`
+instead, for a single test or for a whole suite:
 
 ```swift
 @Suite(.taskDetachmentDisabled)

@@ -85,3 +85,4 @@ whichever iterator gets there first.
 - ``TaskTimeoutError``
 - ``FIFOQueue``
 - ``InlineProperty``
+- ``Task/detachedUnlessDisabled(priority:operation:)``
