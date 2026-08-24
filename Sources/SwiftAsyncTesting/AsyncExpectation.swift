@@ -9,7 +9,10 @@
 #if canImport(Testing)
 import Testing
 
-#if canImport(Darwin)
+// Checked independently of Darwin: some Darwin-based toolchains (e.g. a
+// Tuist-generated project) can drop XCTest from the module search path
+// while Swift Testing stays available.
+#if canImport(XCTest)
 import XCTest
 #endif
 
@@ -188,10 +191,10 @@ public struct AsyncExpectation: Sendable {
 
     private func record(_ message: String) {
         guard Test.current != nil else {
-            #if canImport(Darwin)
+            #if canImport(XCTest)
             XCTFail(message)
             #else
-            fatalError("No test running")
+            fatalError(message)
             #endif
             return
         }
