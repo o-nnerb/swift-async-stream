@@ -3,13 +3,15 @@
 
 // MARK: - TaskDetachment
 
-/// Governs whether the module's internal `Task.detached` call sites actually detach.
+/// Governs whether ``Task/detachedUnlessDisabled(priority:operation:)`` actually detaches.
 ///
 /// Production code always detaches, which is the point: the spawned work must not inherit
 /// priority or task-local values from whichever caller happened to trigger it. Tests can flip
-/// ``isDisabled`` to route those same call sites through a plain, attached `Task` instead, so
-/// the spawned work stays reachable through whatever task-local infrastructure the test carries
-/// (leak trackers, expectations, ...).
+/// ``isDisabled`` — most conveniently via `SwiftAsyncTesting`'s `.taskDetachmentDisabled` trait —
+/// to route calls through a plain, attached `Task` instead, so the spawned work stays reachable
+/// through whatever task-local infrastructure the test carries (leak trackers, expectations,
+/// ...). This affects every caller of `detachedUnlessDisabled`, not just the ones inside this
+/// module.
 @_spi(Testing)
 public enum TaskDetachment {
 
@@ -20,8 +22,14 @@ public enum TaskDetachment {
 
 extension Task {
 
-    /// Detaches, unless ``TaskDetachment/isDisabled`` is set, in which case it spawns a plain
-    /// `Task` that inherits the caller's priority and task locals instead.
+    /// Spawns a `Task` the way `Task.detached` does, except a test can opt it back into the
+    /// caller's task tree.
+    ///
+    /// In production this behaves exactly like `Task.detached`: `operation` does not inherit the
+    /// caller's priority or task-local values. Inside a test scoped by `SwiftAsyncTesting`'s
+    /// `.taskDetachmentDisabled` trait, it instead behaves like a plain `Task`, inheriting the
+    /// caller's priority and task locals — useful so leak trackers, expectations, and other
+    /// task-local-based test infrastructure can still see the spawned work.
     @discardableResult
     public static func detachedUnlessDisabled(
         priority: TaskPriority? = nil,
@@ -34,8 +42,16 @@ extension Task {
         }
     }
 
-    /// Detaches, unless ``TaskDetachment/isDisabled`` is set, in which case it spawns a plain
-    /// `Task` that inherits the caller's priority and task locals instead.
+    /// Spawns a `Task` the way `Task.detached` does, except a test can opt it back into the
+    /// caller's task tree.
+    ///
+    /// In production this behaves exactly like `Task.detached`: `operation` does not inherit the
+    /// caller's priority or task-local values. Inside a test scoped by `SwiftAsyncTesting`'s
+    /// `.taskDetachmentDisabled` trait, it instead behaves like a plain `Task`, inheriting the
+    /// caller's priority and task locals — useful so leak trackers, expectations, and other
+    /// task-local-based test infrastructure can still see the spawned work. A throw from
+    /// `operation` does not propagate here; it is stored on the returned `Task` and surfaces from
+    /// `await task.value`.
     @discardableResult
     public static func detachedUnlessDisabled(
         priority: TaskPriority? = nil,
