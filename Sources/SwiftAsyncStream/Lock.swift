@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 //===----------------------------------------------------------------------===//
 //
 // This source file is derived from the SwiftNIO open source project

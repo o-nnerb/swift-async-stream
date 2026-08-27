@@ -1,5 +1,5 @@
 // Copyright 2026 Brenno Giovanini de Moura
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 @_spi(Testing) import SwiftAsyncStream
 import Testing
