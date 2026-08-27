@@ -39,38 +39,44 @@ jobs:
       swift-version: '6.2'
       platform: macos-26
 
-      # Step 1
+      # Step 1 – Header Validation
+      enable-header-validation: true
+      header-template: |
+        // Copyright 2026 Brenno Giovanini de Moura
+        // SPDX-License-Identifier: Apache-2.0
+
+      # Step 2 – Format
       enable-format: true
       format-swift-version: '6.3'
 
-      # Step 2
+      # Step 3
       enable-breaking-changes: true
       skip-on-major-update: true
       force-skip-breaking-changes: ${{ contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
 
-      # Step 3 – Apple
+      # Step 4 – Apple
       enable-apple-tests: true
       package-name: "SwiftAsyncStream-Package"
       xcode-version: '26.6'
       apple-coverage-enabled: true
 
-      # Step 3 – Third Party
+      # Step 4 – Third Party
       enable-third-party-tests: true
       third-party-coverage-enabled: true
 
-      # Step 3 – Linkage Test (FoundationEssentials)
+      # Step 4 – Linkage Test (FoundationEssentials)
       enable-linkage-test: true
 
-      # Step 3 – Android Build
+      # Step 4 – Android Build
       enable-android-build: true
 
-      # Step 3 – Release Builds
+      # Step 4 – Release Builds
       enable-release-builds: true
 
-      # Step 3 – Static SDK
+      # Step 4 – Static SDK
       enable-static-sdk: true
 
-      # Step 4
+      # Step 5
       enable-coverage-upload: true
     secrets: inherit
 
