@@ -124,3 +124,56 @@ struct ConcurrentExecutionTraitUnnamedPoolThrottlingTests {
         }
     }
 }
+
+// MARK: - Nil disables the trait
+
+/// A `nil` executor is a mutual rendezvous: each test signals its own arrival and waits for the
+/// other's. That only resolves if both are genuinely running at the same time — if `nil` still
+/// applied a semaphore under the hood, whichever test ran second would never start, and the
+/// first would time out waiting for a signal that never comes.
+@Suite(.concurrent(nil))
+struct ConcurrentExecutionTraitNilDisablesTheUnnamedPoolTests {
+
+    private static let firstArrived = AsyncSignal()
+    private static let secondArrived = AsyncSignal()
+
+    @Test
+    func firstTest() async throws {
+        Self.firstArrived.signal()
+        try await withTaskTimeout(seconds: 5) {
+            try await Self.secondArrived.wait()
+        }
+    }
+
+    @Test
+    func secondTest() async throws {
+        Self.secondArrived.signal()
+        try await withTaskTimeout(seconds: 5) {
+            try await Self.firstArrived.wait()
+        }
+    }
+}
+
+/// Same proof as above, through `concurrent(_:id:)`'s `nil` case.
+@Suite(.concurrent(nil, id: "trait-tests-named-pool-nil"))
+struct ConcurrentExecutionTraitNilDisablesTheNamedPoolTests {
+
+    private static let firstArrived = AsyncSignal()
+    private static let secondArrived = AsyncSignal()
+
+    @Test
+    func firstTest() async throws {
+        Self.firstArrived.signal()
+        try await withTaskTimeout(seconds: 5) {
+            try await Self.secondArrived.wait()
+        }
+    }
+
+    @Test
+    func secondTest() async throws {
+        Self.secondArrived.signal()
+        try await withTaskTimeout(seconds: 5) {
+            try await Self.firstArrived.wait()
+        }
+    }
+}

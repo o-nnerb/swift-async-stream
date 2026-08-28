@@ -110,6 +110,15 @@ A pool's limit is fixed by whichever call declares it first — declaring the sa
 a different number is a configuration mistake, not something resolved by taking the min or the
 max, so it traps instead of picking a value for you.
 
+Both take an optional executor: `nil` disables the trait entirely, so the test runs without ever
+touching a semaphore. Useful when the limit comes from somewhere that may be absent, such as an
+environment variable, without a branch at every call site:
+
+```swift
+@Suite(.concurrent(ProcessInfo.processInfo.environment["MAX_CONCURRENT_DB"].flatMap(Int.init)))
+struct DatabaseTests { /* ... */ }
+```
+
 ## Topics
 
 ### Expectations
