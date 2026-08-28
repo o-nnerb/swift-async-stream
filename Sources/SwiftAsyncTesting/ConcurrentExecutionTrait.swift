@@ -19,13 +19,23 @@ import Testing
 /// A pool's permit count is fixed by whichever call declares it first. Declaring the same pool
 /// again with a different `executor` is a configuration mistake — not something to silently
 /// resolve by taking the min or the max — so it traps instead of picking a value for you.
+///
+/// Passing `nil` for `executor` disables the trait entirely: the test runs without ever
+/// touching a semaphore, as if the trait had not been applied. That makes it safe to drive the
+/// limit from something that may be absent, such as an environment variable, without a branch
+/// at every call site.
 public struct ConcurrentExecutionTrait: TestTrait, SuiteTrait, TestScoping {
 
     public var isRecursive: Bool { true }
 
-    private let semaphore: AsyncSemaphore
+    private let semaphore: AsyncSemaphore?
 
-    fileprivate init(executor: Int, id: String?) {
+    fileprivate init(executor: Int?, id: String?) {
+        guard let executor else {
+            semaphore = nil
+            return
+        }
+
         precondition(executor > .zero, "concurrent(_:) requires at least 1 concurrent execution slot")
 
         semaphore =
@@ -38,6 +48,11 @@ public struct ConcurrentExecutionTrait: TestTrait, SuiteTrait, TestScoping {
         testCase: Test.Case?,
         performing function: @Sendable () async throws -> Void
     ) async throws {
+        guard let semaphore else {
+            try await function()
+            return
+        }
+
         try await semaphore.withPermitVoid {
             try await function()
         }
@@ -47,18 +62,18 @@ public struct ConcurrentExecutionTrait: TestTrait, SuiteTrait, TestScoping {
 extension Trait where Self == ConcurrentExecutionTrait {
 
     /// Limits how many tests may run at once across every call site that also omits `id`,
-    /// backed by one ``AsyncSemaphore`` shared globally.
+    /// backed by one ``AsyncSemaphore`` shared globally. Passing `nil` disables the trait.
     /// - Parameter executor: How many tests may hold this trait's permit at the same time.
-    public static func concurrent(_ executor: Int) -> Self {
+    public static func concurrent(_ executor: Int?) -> Self {
         Self(executor: executor, id: nil)
     }
 
     /// Limits how many tests may run at once across every call site sharing this `id`, backed
-    /// by one ``AsyncSemaphore`` per `id`.
+    /// by one ``AsyncSemaphore`` per `id`. Passing `nil` disables the trait.
     /// - Parameter executor: How many tests may hold this trait's permit at the same time.
     /// - Parameter id: Identifies the shared pool. Every use of the same `id` must agree on the
     ///   same `executor`.
-    public static func concurrent(_ executor: Int, id: String) -> Self {
+    public static func concurrent(_ executor: Int?, id: String) -> Self {
         Self(executor: executor, id: id)
     }
 }
