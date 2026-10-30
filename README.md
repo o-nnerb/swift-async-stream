@@ -34,7 +34,7 @@ in the same archive; switch between the two from the sidebar.
 ## Installation
 
 ```swift
-.package(url: "https://github.com/o-nnerb/swift-async-stream.git", from: "2.0.0")
+.package(url: "https://github.com/o-nnerb/swift-async-stream.git", from: "3.0.0")
 ```
 
 ```swift
@@ -168,6 +168,15 @@ Inverted expectations, `.taskDetachmentDisabled` for attaching background tasks 
 your own — to a test's task tree, and `@_spi(Testing)` hooks for deterministic queue shapes in
 `AsyncLock`, `AsyncSemaphore` and `SerialCoalescingQueue`, are covered in the hosted
 documentation.
+
+---
+
+## Migration from 2.x
+
+3.0 has one breaking change: **the minimum toolchain is Swift 6.4**. There are no API changes. The
+package's `swift-tools-version` is now 6.4, so SwiftPM refuses to resolve it on an older compiler,
+and the `#if compiler` branching that kept earlier toolchains working is gone. If you are on
+Swift 6.2 or 6.3, stay on 2.1.x.
 
 ---
 

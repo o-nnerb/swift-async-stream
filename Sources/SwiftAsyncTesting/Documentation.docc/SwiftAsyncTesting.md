@@ -10,7 +10,7 @@
     @Available(iOS, introduced: "15.0")
     @Available(tvOS, introduced: "15.0")
     @Available(watchOS, introduced: "8.0")
-    @Available("Swift", introduced: "6.2")
+    @Available("Swift", introduced: "6.4")
 
     @SupportedLanguage(swift)
 }
