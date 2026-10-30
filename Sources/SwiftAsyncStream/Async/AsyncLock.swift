@@ -134,7 +134,7 @@ public final class AsyncLock: Sendable {
             debugInfo: .init(function: function, file: file, line: line)
         )
 
-        await withUnsafeContinuation(isolation: isolation) { continuation in
+        await withUnsafeContinuation { continuation in
             let handoff = lock.withLock { () -> Handoff? in
                 operation.schedule(continuation)
 

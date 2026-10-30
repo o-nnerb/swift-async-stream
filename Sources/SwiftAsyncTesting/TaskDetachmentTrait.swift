@@ -24,7 +24,9 @@ public struct TaskDetachmentDisabledTrait: TestTrait, SuiteTrait, TestScoping {
         testCase: Test.Case?,
         performing function: @Sendable () async throws -> Void
     ) async throws {
-        try await TaskDetachment.$isDisabled.withValue(true, operation: function)
+        try await TaskDetachment.$isDisabled.withValue(true) {
+            try await function()
+        }
     }
 }
 
