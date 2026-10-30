@@ -1,3 +1,6 @@
+// Copyright 2026 Brenno Giovanini de Moura
+// SPDX-License-Identifier: Apache-2.0
+
 @_exported import SwiftAsyncStream
 
 // Not every Swift SDK ships a Testing module — the official static Android SDK
