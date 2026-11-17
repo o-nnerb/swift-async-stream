@@ -39,12 +39,11 @@ public struct PendingWaitersTimeout: Error, CustomStringConvertible {
 /// Counts iterations rather than reading a clock, so it works below the deployment target of
 /// `ContinuousClock` and keeps the package free of Foundation.
 ///
-/// The `isolation` parameter lets `value` read actor isolated state when the caller is an
-/// actor, and costs nothing when it is not.
-func waitForCount(
+/// Runs on the caller's isolation (`nonisolated(nonsending)`), so `value` may read actor isolated
+/// state when the caller is an actor, and costs nothing when it is not.
+nonisolated(nonsending) func waitForCount(
     _ count: Int,
     timeout: Double,
-    isolation: isolated (any Actor)? = #isolation,
     value: () -> Int
 ) async throws {
     let attempts = max(1, Int(timeout * 1000))

@@ -9,7 +9,7 @@
 /// Like ``AsyncLock``, and for the same reason, waiting is cancellation transparent: a task
 /// cancelled while waiting still takes its turn, runs, and returns its permit. That guarantee
 /// rests entirely on every permit being returned, which is why
-/// ``withPermit(isolation:function:file:line:_:)`` is the intended entry point.
+/// ``withPermit(function:file:line:_:)`` is the intended entry point.
 ///
 /// If permits can be held for a long or unbounded time, so that a cancelled waiter would only
 /// be stuck in line to give its slot straight back, use ``AsyncCancellableSemaphore`` instead:
@@ -73,47 +73,42 @@ public final class AsyncSemaphore: Sendable {
     // MARK: - Public methods
 
     /// Executes the provided closure while holding a permit.
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for ``debugDescription``.
     /// - Parameter file: The caller's file, captured for ``debugDescription``.
     /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Parameter block: The closure to execute while holding the permit.
     /// - Returns: The result of the closure.
-    public func withPermit<Value: Sendable, Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withPermit<Value: Sendable, Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Value
     ) async rethrows -> Value {
-        await wait(isolation: isolation, function: function, file: file, line: line)
+        await wait(function: function, file: file, line: line)
         defer { signal() }
 
         return try await block()
     }
 
     /// Executes the provided closure while holding a permit, without returning a value.
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for ``debugDescription``.
     /// - Parameter file: The caller's file, captured for ``debugDescription``.
     /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Parameter block: The closure to execute while holding the permit.
-    public func withPermitVoid<Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withPermitVoid<Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Void
     ) async rethrows {
-        await wait(isolation: isolation, function: function, file: file, line: line)
+        await wait(function: function, file: file, line: line)
         defer { signal() }
 
         try await block()
     }
 
     /// Acquires a permit, suspending until one is available.
-    public func wait(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func wait(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line
@@ -191,7 +186,7 @@ extension AsyncSemaphore {
     ///
     /// Same reason as ``AsyncLock/waitForPendingOperations(_:timeout:)``: task creation order
     /// is not task arrival order.
-    public func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
+    public nonisolated(nonsending) func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { waitingCount }
     }
 }
