@@ -176,6 +176,37 @@ documentation.
 
 ---
 
+## Migration from 3.x
+
+**The `isolation:` parameter is gone.** `AsyncLock`, `AsyncSemaphore`, `AsyncCancellableSemaphore`
+and `AsyncSignal` used to take `isolation: isolated (any Actor)? = #isolation` on `withLock`,
+`withLockVoid`, `lock`, `withPermit`, `withPermitVoid` and `wait`, so that they ran on the
+caller's actor. They are now `nonisolated(nonsending)` ([SE-0461][se-0461]), which does the same
+thing without a parameter: the call runs on whatever actor the caller is on, with no hop and no
+`Sendable` requirement on what the caller holds.
+
+Nothing changes if you never passed `isolation:`, which is almost everyone: the argument was
+defaulted. If you did, delete it.
+
+```swift
+// 3.x
+await lock.withLock(isolation: self) { … }
+
+// now
+await lock.withLock { … }
+```
+
+Because these are `nonisolated(nonsending)`, an uncontended `wait()` or `lock()` called from the
+main actor no longer suspends, so nothing else queued on the main actor runs in the middle of it.
+Contended calls still suspend and resume on the caller's actor, as before.
+
+The `@Sendable` `block` of `withLock` and `withPermit` is unchanged: it is still `@Sendable`
+and nonisolated, so it still cannot touch the caller's actor state.
+
+[se-0461]: https://github.com/swiftlang/swift-evolution/blob/main/proposals/0461-async-function-isolation.md
+
+---
+
 ## Migration from 2.x
 
 3.0 has one breaking change: **the minimum toolchain is Swift 6.4**. There are no API changes. The

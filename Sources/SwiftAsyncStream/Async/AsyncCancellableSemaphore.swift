@@ -19,14 +19,14 @@
 /// behind it would wait one more hand-off.
 ///
 /// Here, waiting is cancellable. A task cancelled while it waits leaves the queue and
-/// ``wait(isolation:function:file:line:)`` throws `CancellationError`, without taking a permit.
+/// ``wait(function:file:line:)`` throws `CancellationError`, without taking a permit.
 /// That includes a task that was already cancelled before it asked. Everybody else keeps their
 /// place: waiters are served in arrival order, and a returned permit goes straight to the first of
 /// them instead of back to the count to be raced for.
 ///
 /// A task that is handed a permit at the same moment it is cancelled wins the race and keeps the
-/// permit: ``wait(isolation:function:file:line:)`` returns normally, and the permit is the
-/// caller's to give back. This is why ``withPermit(isolation:function:file:line:_:)`` is the
+/// permit: ``wait(function:file:line:)`` returns normally, and the permit is the
+/// caller's to give back. This is why ``withPermit(function:file:line:_:)`` is the
 /// intended entry point. It gives the permit back on every path, and only after a successful
 /// wait.
 ///
@@ -180,7 +180,6 @@ public final class AsyncCancellableSemaphore: Sendable {
     ///
     /// The permit is returned on every path out of the closure, and only if it was acquired.
     ///
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for ``debugDescription``.
     /// - Parameter file: The caller's file, captured for ``debugDescription``.
     /// - Parameter line: The caller's line, captured for ``debugDescription``.
@@ -188,14 +187,13 @@ public final class AsyncCancellableSemaphore: Sendable {
     /// - Returns: The result of the closure.
     /// - Throws: `CancellationError` if the current task is cancelled before it was handed a
     /// permit, in which case the closure never runs. Otherwise, whatever the closure throws.
-    public func withPermit<Value: Sendable, Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withPermit<Value: Sendable, Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Value
     ) async throws -> Value {
-        try await wait(isolation: isolation, function: function, file: file, line: line)
+        try await wait(function: function, file: file, line: line)
         defer { signal() }
 
         return try await block()
@@ -205,21 +203,19 @@ public final class AsyncCancellableSemaphore: Sendable {
     ///
     /// The permit is returned on every path out of the closure, and only if it was acquired.
     ///
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for ``debugDescription``.
     /// - Parameter file: The caller's file, captured for ``debugDescription``.
     /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Parameter block: The closure to execute while holding the permit.
     /// - Throws: `CancellationError` if the current task is cancelled before it was handed a
     /// permit, in which case the closure never runs. Otherwise, whatever the closure throws.
-    public func withPermitVoid<Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withPermitVoid<Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Void
     ) async throws {
-        try await wait(isolation: isolation, function: function, file: file, line: line)
+        try await wait(function: function, file: file, line: line)
         defer { signal() }
 
         try await block()
@@ -228,17 +224,15 @@ public final class AsyncCancellableSemaphore: Sendable {
     /// Acquires a permit, suspending until one is available.
     ///
     /// Every successful return must be paired with one call to ``signal()``. Prefer
-    /// ``withPermit(isolation:function:file:line:_:)``, which does that for you.
+    /// ``withPermit(function:file:line:_:)``, which does that for you.
     ///
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for ``debugDescription``.
     /// - Parameter file: The caller's file, captured for ``debugDescription``.
     /// - Parameter line: The caller's line, captured for ``debugDescription``.
     /// - Throws: `CancellationError` if the current task is cancelled before it was handed a
     /// permit, including when it was cancelled before asking. No permit is taken in that case,
     /// so there is nothing to ``signal()``.
-    public func wait(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func wait(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line
@@ -280,8 +274,7 @@ public final class AsyncCancellableSemaphore: Sendable {
             },
             onCancel: {
                 cancel(waiter)
-            },
-            isolation: isolation
+            }
         )
     }
 
@@ -359,7 +352,7 @@ extension AsyncCancellableSemaphore {
     ///
     /// Same reason as ``AsyncSemaphore/waitForWaiters(_:timeout:)``: task creation order is not
     /// task arrival order.
-    public func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
+    public nonisolated(nonsending) func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { waitingCount }
     }
 }

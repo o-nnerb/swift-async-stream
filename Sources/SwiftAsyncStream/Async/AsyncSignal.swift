@@ -1,14 +1,14 @@
 // Copyright 2026 Brenno Giovanini de Moura
 // SPDX-License-Identifier: Apache-2.0
 
-/// A manual reset event. Tasks calling ``wait(isolation:function:file:line:)`` suspend while
+/// A manual reset event. Tasks calling ``wait(function:file:line:)`` suspend while
 /// the signal is closed, and are all released at once by ``signal()``.
 ///
 /// ## Cancellation
 ///
 /// Unlike ``AsyncLock``, there is no guarantee that a waiting task will ever be released:
 /// ``signal()`` may never be called. Waiting is therefore cancellable, and
-/// ``wait(isolation:function:file:line:)`` throws `CancellationError` when the current task is
+/// ``wait(function:file:line:)`` throws `CancellationError` when the current task is
 /// cancelled before the signal arrives.
 public final class AsyncSignal: Sendable {
 
@@ -71,8 +71,7 @@ public final class AsyncSignal: Sendable {
 
     /// Suspends until the signal is open.
     /// - Throws: `CancellationError` when the current task is cancelled while waiting.
-    public func wait(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func wait(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line
@@ -104,8 +103,7 @@ public final class AsyncSignal: Sendable {
             },
             onCancel: {
                 self.cancel(operation)
-            },
-            isolation: isolation
+            }
         )
 
         if operation.state == .cancelled {
@@ -165,7 +163,7 @@ extension AsyncSignal {
     /// Same reason as ``AsyncLock/waitForPendingOperations(_:timeout:)``: creating a `Task`
     /// does not decide when it reaches the signal, so a test that needs a waiter to be queued
     /// has to wait for it rather than sleep and assume.
-    public func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
+    public nonisolated(nonsending) func waitForWaiters(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { waitingCount }
     }
 }

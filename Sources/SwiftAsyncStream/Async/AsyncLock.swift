@@ -84,39 +84,35 @@ public final class AsyncLock: Sendable {
     // MARK: - Public methods
 
     /// Executes the provided closure while maintaining the lock.
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for watchdog reports.
     /// - Parameter file: The caller's file, captured for watchdog reports.
     /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
     /// - Returns: The result of the closure.
-    public func withLock<Value: Sendable, Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withLock<Value: Sendable, Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Value
     ) async rethrows -> Value {
-        await lock(isolation: isolation, function: function, file: file, line: line)
+        await lock(function: function, file: file, line: line)
         defer { unlock() }
 
         return try await block()
     }
 
     /// Executes the provided closure while maintaining the lock, without returning a value.
-    /// - Parameter isolation: The isolated execution `Actor`.
     /// - Parameter function: The caller's function name, captured for watchdog reports.
     /// - Parameter file: The caller's file, captured for watchdog reports.
     /// - Parameter line: The caller's line, captured for watchdog reports.
     /// - Parameter block: The closure to execute while holding the lock.
-    public func withLockVoid<Failure: Error>(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func withLockVoid<Failure: Error>(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line,
         _ block: @Sendable () async throws(Failure) -> Void
     ) async rethrows {
-        await lock(isolation: isolation, function: function, file: file, line: line)
+        await lock(function: function, file: file, line: line)
         defer { unlock() }
 
         try await block()
@@ -124,8 +120,7 @@ public final class AsyncLock: Sendable {
 
     /// Acquires the lock. If the lock is already held by another task, this method will suspend
     /// until the lock becomes available.
-    public func lock(
-        isolation: isolated (any Actor)? = #isolation,
+    public nonisolated(nonsending) func lock(
         function: StaticString = #function,
         file: StaticString = #fileID,
         line: UInt = #line
@@ -264,7 +259,7 @@ extension AsyncLock {
     /// Creating a `Task` does not decide when it reaches the lock, so a test that needs a
     /// known queue order has to admit one waiter at a time and confirm its arrival, rather
     /// than creating them all at once and assuming creation order is arrival order.
-    public func waitForPendingOperations(_ count: Int, timeout: Double = 2) async throws {
+    public nonisolated(nonsending) func waitForPendingOperations(_ count: Int, timeout: Double = 2) async throws {
         try await waitForCount(count, timeout: timeout) { pendingCount }
     }
 }
