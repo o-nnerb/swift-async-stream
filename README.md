@@ -67,6 +67,7 @@ in turn requires throwing.
 |---|---|---|
 | `AsyncLock` | transparent | the holder always releases through `defer` |
 | `AsyncSemaphore` | transparent | the permit always comes back through `defer` |
+| `AsyncCancellableSemaphore` | cancellable, throws `CancellationError` | permits can be held for as long as something outside the program likes, so a cancelled waiter should leave instead of queueing for a slot it will give back |
 | `AsyncSignal` | cancellable, throws `CancellationError` | nothing guarantees `signal()` ever arrives |
 | `SerialCoalescingQueue` | cancellable, throws `CancellationError` | a waiter can leave before dispatch |
 | Subjects | terminate the sequence | `next()` returns `nil`, the `for await` exits |
@@ -99,11 +100,13 @@ let session = try await lock.withLock { try await refreshSession() }
 
 await semaphore.withPermitVoid { await download(url) }   // bounded concurrency
 
+try await slots.withPermitVoid { try await send(request) }   // AsyncCancellableSemaphore, cancelled waiters leave
+
 try await ready.wait()   // AsyncSignal, released by ready.signal()
 ```
 
-`AsyncLock` and `AsyncSemaphore` are not reentrant. `Lock` is the synchronous primitive
-everything else is built on.
+`AsyncLock`, `AsyncSemaphore` and `AsyncCancellableSemaphore` are not reentrant. `Lock` is the
+synchronous primitive everything else is built on.
 
 ### Subjects
 
@@ -132,7 +135,9 @@ subject.send(42)
 
 - `withTaskTimeout` runs an operation under a structured deadline.
 - `SerialCoalescingQueue` collapses concurrent identical submissions into one execution.
-- `FIFOQueue` is the amortized O(1) queue every primitive above uses for its waiters.
+- `FIFOQueue` is the amortized O(1) queue the primitives above use for their waiters.
+  `AsyncCancellableSemaphore` links its waiters instead, so one can leave from anywhere in the
+  queue in O(1).
 - `Task.detachedUnlessDisabled` is a drop-in for `Task.detached` that a test can opt back into
   the caller's task tree via `.taskDetachmentDisabled`, see [below](#testing).
 

@@ -38,7 +38,7 @@ Cancellation in Swift is cooperative: it never resumes a suspended continuation 
 primitive has exactly two honest options when a waiter is cancelled. It can leave the waiter in
 the queue, which is safe only if the queue is guaranteed to drain (``AsyncLock``,
 ``AsyncSemaphore``). Or it can pull the waiter out and resume it with `CancellationError`, which
-is what ``AsyncSignal`` and ``SerialCoalescingQueue`` do.
+is what ``AsyncSignal``, ``AsyncCancellableSemaphore`` and ``SerialCoalescingQueue`` do.
 
 Under a transparent contract a cancelled task still takes its turn and runs. Check for
 cancellation inside the critical section if that matters:
@@ -60,6 +60,7 @@ try await lock.withLock {
 ### Coordination
 
 - ``AsyncSemaphore``
+- ``AsyncCancellableSemaphore``
 - ``AsyncSignal``
 - ``SerialCoalescingQueue``
 - ``CoalescingJob``
