@@ -11,6 +11,10 @@
 /// rests entirely on every permit being returned, which is why
 /// ``withPermit(isolation:function:file:line:_:)`` is the intended entry point.
 ///
+/// If permits can be held for a long or unbounded time, so that a cancelled waiter would only
+/// be stuck in line to give its slot straight back, use ``AsyncCancellableSemaphore`` instead:
+/// its waiters leave the queue and throw `CancellationError`.
+///
 /// - Warning: Do not use this as an event by starting it at zero permits and signalling from
 /// elsewhere. Nothing guarantees the signal ever arrives, so a cancelled waiter would never
 /// escape. ``AsyncSignal`` exists for that and is cancellable precisely because it has no such
